@@ -44,6 +44,8 @@ Website showing MJO tracks from several tracking methods, growing into live fore
 - `ux-engineer` — drives the page, fixes interaction/accessibility; owns main.js.
 - `communicator` — read-only; ranked outreach/design ideas.
 
+- `docs/track-prediction-plan.md` — plan for the ML track-prediction work (living document).
+
 ## Honesty rules
 - RMM on the Hovmöller is placed at the *approximate* longitude of its phase (WH04
   composites) — always labelled as such.
