@@ -37,7 +37,12 @@ export function drawMap(sel, data, state) {
   const bAll = zoomG.append("button").attr("type", "button").attr("class", "fit").text("Whole tropics");
   const other = bar.append("label").attr("class", "map-other");
   const otherIn = other.append("input").attr("type", "checkbox").property("checked", ui.showOthers);
-  other.append("span").html("Other rain systems <span class=\"dim\">(non-MJO LPTs)</span>");
+  other.append("span").html("Also show non-MJO LPTs <span class=\"dim\">(grey)</span>");
+  const groups = new Set(sys.map((s) => s.lpt_index.split(".")[0])).size;
+  bar.append("span").attr("class", "map-count").html(
+    `<b>${sys.length} MJO LPT system${sys.length === 1 ? "" : "s"}</b> in this window` +
+    (groups < sys.length ? ` (${groups} LPT group${groups === 1 ? "" : "s"}; branches of one group are drawn separately)` : "") +
+    ` · only systems on the ${data.lptSrc.label} MJO list`);
 
   const W = Math.max(280, root.node().clientWidth || 1200);
   const Hbase = W * (2 * LAT) / 360;                       // whole 0–360° band at k = 1

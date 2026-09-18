@@ -325,3 +325,5 @@ body { counter-reset: fig; }
 #lpt-src { font-size: 0.8rem; padding: 3px 6px; max-width: 16rem; }
 
 .theme-btn { font-size: 0.8rem; padding: 4px 10px; white-space: nowrap; }
+.map-count { color: var(--muted); font-size: 0.8rem; margin-left: auto; }
+.map-count b { color: var(--ink); font-weight: 600; }
