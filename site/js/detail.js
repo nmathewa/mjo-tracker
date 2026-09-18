@@ -1,7 +1,7 @@
 // Detail view for one LPT system, opened by clicking it (map, Hovmöller or event list).
 // Laid out after Kerns & Chen (2020) Fig. 1, lettered column by column: (a) rain-area footprints
 // coloured by date, (b) longitude–time track, (c) centroid longitude, (d) zonal speed, (e) propagation.
-import { fmtDay } from "./data.js";
+import { fmtDay, loadOutline } from "./data.js";
 import { showTip, hideTip, axisTitle } from "./charts.js";
 
 const KM_PER_DEG = 111.2;
@@ -22,11 +22,19 @@ function zonalSpeed(track) {
   });
 }
 
-export function drawDetail(sel, data, s, { onClose, onShow }) {
-  const card = d3.select(sel);
+let drawToken = 0;
+export async function drawDetail(sel, data, s, opts) {
+  const card = d3.select(sel), token = ++drawToken;
+  if (!s) { card.selectAll("*").remove(); card.attr("hidden", true); return; }
+  // real outlines (IMERG) when extracted; otherwise equal-area circles
+  const outline = await loadOutline(data.lptSrc, s.id).catch(() => null);
+  if (token !== drawToken) return;   // a newer selection arrived meanwhile
   card.selectAll("*").remove();
-  if (!s) { card.attr("hidden", true); return; }
   card.attr("hidden", null);
+  draw(card, data, s, outline, opts);
+}
+
+function draw(card, data, s, outline, { onClose, onShow }) {
 
   const tr = s.track;
   const inEprop = (t) => s.eprop.some((e) => t >= e.t0 && t <= e.t1);
@@ -48,9 +56,12 @@ export function drawDetail(sel, data, s, { onClose, onShow }) {
 
   // ---- (a) footprints map
   {
-    const p = panel("p-map", "a", "Rain-area footprints <span class=\"sub\">colour = date</span>");
+    const p = panel("p-map", "a", outline ? "Rain-area outlines <span class=\"sub\">every 6 h · colour = date</span>"
+      : "Rain-area footprints <span class=\"sub\">equal-area circles · colour = date</span>");
     const W = Math.max(280, p.node().clientWidth || 600);
-    const lons = tr.flatMap((q) => [q.lon - rDeg(q), q.lon + rDeg(q)]), lats = tr.flatMap((q) => [q.lat - rDeg(q), q.lat + rDeg(q)]);
+    const pts = outline ? outline.flatMap((o) => o.rings.flat()) : null;
+    const lons = outline ? pts.map((c) => c[0]) : tr.flatMap((q) => [q.lon - rDeg(q), q.lon + rDeg(q)]);
+    const lats = outline ? pts.map((c) => c[1]) : tr.flatMap((q) => [q.lat - rDeg(q), q.lat + rDeg(q)]);
     let a = d3.min(lons) - 4, b = d3.max(lons) + 4, c = Math.max(-60, d3.min(lats) - 4), d = Math.min(60, d3.max(lats) + 4);
     const H = Math.round(Math.min(W * 0.75, Math.max(200, W * (d - c) / (b - a))));
     // widen the shorter side so degrees stay square
@@ -64,9 +75,15 @@ export function drawDetail(sel, data, s, { onClose, onShow }) {
     g.append("rect").attr("class", "ocean").attr("width", W).attr("height", H);
     g.append("path").attr("class", "gridline").attr("fill", "none").attr("d", geo(d3.geoGraticule().step([15, 15])()));
     g.append("path").attr("class", "land").attr("d", geo(topojson.feature(data.land, data.land.objects.land)));
-    g.append("g").selectAll("circle").data(tr).join("circle").attr("class", "foot")
-      .attr("cx", (q) => proj([q.lon, q.lat])[0]).attr("cy", (q) => proj([q.lon, q.lat])[1])
-      .attr("r", (q) => rDeg(q) * ppd).attr("stroke", (q) => tcol(q.t));
+    if (outline) {
+      const ring = d3.line((c) => proj(c)[0], (c) => proj(c)[1]);
+      g.append("g").selectAll("path").data(outline.flatMap((o) => o.rings.map((r) => ({ t: o.t, r }))))
+        .join("path").attr("class", "foot outline").attr("d", (d) => ring(d.r)).attr("stroke", (d) => tcol(d.t));
+    } else {
+      g.append("g").selectAll("circle").data(tr).join("circle").attr("class", "foot")
+        .attr("cx", (q) => proj([q.lon, q.lat])[0]).attr("cy", (q) => proj([q.lon, q.lat])[1])
+        .attr("r", (q) => rDeg(q) * ppd).attr("stroke", (q) => tcol(q.t));
+    }
     g.append("path").attr("class", "det-track").attr("d", d3.line((q) => proj([q.lon, q.lat])[0], (q) => proj([q.lon, q.lat])[1])(tr));
     g.append("circle").attr("class", "lpt-start").attr("r", 3.5).attr("cx", proj([tr[0].lon, tr[0].lat])[0]).attr("cy", proj([tr[0].lon, tr[0].lat])[1]);
     // lat/lon labels
@@ -108,10 +125,14 @@ export function drawDetail(sel, data, s, { onClose, onShow }) {
 
   // ---- (b) longitude–time
   {
-    const p = panel("p-hov", "b", "Longitude–time <span class=\"sub\">circles = rain-area radius</span>");
+    const p = panel("p-hov", "b", outline ? "Longitude–time <span class=\"sub\">bars = east–west extent of the rain area</span>"
+      : "Longitude–time <span class=\"sub\">circles = rain-area radius</span>");
+    const extent = outline?.map((o) => { const l = o.rings.flat().map((c) => c[0]); return { t: o.t, lo: d3.min(l), hi: d3.max(l) }; })
+      .filter((e) => e.lo !== undefined);
     const W = Math.max(260, p.node().clientWidth || 500), h = Math.round(Math.min(460, Math.max(260, s.duration_days * 7)));
     const m = { t: 8, r: 10, b: 38, l: 66 };
-    const lo = d3.min(tr, (q) => q.lon - rDeg(q)) - 3, hi = d3.max(tr, (q) => q.lon + rDeg(q)) + 3;
+    const lo = (extent ? d3.min(extent, (e) => e.lo) : d3.min(tr, (q) => q.lon - rDeg(q))) - 3;
+    const hi = (extent ? d3.max(extent, (e) => e.hi) : d3.max(tr, (q) => q.lon + rDeg(q))) + 3;
     const x = d3.scaleLinear().domain([lo, hi]).range([m.l, W - m.r]);
     const y = d3.scaleUtc().domain([s.t0, s.t1]).range([m.t, h - m.b]);
     const svg = p.append("svg").attr("viewBox", `0 0 ${W} ${h}`);
@@ -121,9 +142,15 @@ export function drawDetail(sel, data, s, { onClose, onShow }) {
     axisTitle(svg, 12, (m.t + h - m.b) / 2, "Date (UTC)", -90);
     svg.append("g").selectAll("rect").data(s.eprop).join("rect").attr("class", "eprop-band")
       .attr("x", m.l).attr("width", W - m.l - m.r).attr("y", (e) => y(e.t0)).attr("height", (e) => Math.max(1, y(e.t1) - y(e.t0)));
-    svg.append("g").selectAll("circle").data(tr.filter((q, i) => i % 2 === 0)).join("circle").attr("class", "foot foot-hov")
-      .attr("cx", (q) => x(q.lon)).attr("cy", (q) => y(q.t)).attr("r", (q) => Math.min(40, (x(q.lon + rDeg(q)) - x(q.lon)) * 0.35))
-      .attr("stroke", (q) => tcol(q.t));
+    if (extent) {
+      svg.append("g").selectAll("line").data(extent).join("line").attr("class", "extent-bar")
+        .attr("x1", (e) => x(e.lo)).attr("x2", (e) => x(e.hi)).attr("y1", (e) => y(e.t)).attr("y2", (e) => y(e.t))
+        .attr("stroke", (e) => tcol(e.t));
+    } else {
+      svg.append("g").selectAll("circle").data(tr.filter((q, i) => i % 2 === 0)).join("circle").attr("class", "foot foot-hov")
+        .attr("cx", (q) => x(q.lon)).attr("cy", (q) => y(q.t)).attr("r", (q) => Math.min(40, (x(q.lon + rDeg(q)) - x(q.lon)) * 0.35))
+        .attr("stroke", (q) => tcol(q.t));
+    }
     svg.append("g").selectAll("line").data(tr.slice(1).map((q, i) => [tr[i], q])).join("line")
       .attr("class", ([q]) => `det-seg ${inEprop(q.t) ? "east" : "west"}`)
       .attr("x1", ([a]) => x(a.lon)).attr("y1", ([a]) => y(a.t)).attr("x2", ([, b]) => x(b.lon)).attr("y2", ([, b]) => y(b.t));
@@ -172,14 +199,17 @@ export function drawDetail(sel, data, s, { onClose, onShow }) {
       '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line class="det-seg west" x1="2" y1="7" x2="26" y2="7"/></svg>rest of the system\'s life</span>');
   }
 
+  const src = data.lptSrc;
   card.append("p").attr("class", "caption").html(
-    `LPT MJO system ${s.lpt_index}, ${fmtDay(s.t0)} – ${fmtDay(s.t1)} (${Math.round(s.duration_days)} days), laid out after ` +
-    `Kerns &amp; Chen (2020, Fig. 1). (a) Rain-area footprints every 6 h, coloured by date and drawn as circles of equal area ` +
-    `(not the system's real shape), with the centroid track; the open circle marks the start. (b) Longitude–time track of the ` +
-    `centroid, red during eastward propagation and blue otherwise; circles are scaled to the rain-area radius. (c) Centroid ` +
-    `longitude. (d) Zonal speed of the centroid (centred difference over ±12 h). (e) Eastward-propagation periods from the LPT ` +
-    `MJO list: ${facts.join("; ")}. Light red shading in (b)–(d) marks the same periods. TMPA-based LPT tracks cover ` +
-    `Jun 1998 – Jun 2018 only.`);
+    `LPT MJO system ${s.lpt_index} (${src.label}), ${fmtDay(s.t0)} – ${fmtDay(s.t1)} (${Math.round(s.duration_days)} days), laid out after ` +
+    `Kerns &amp; Chen (2020, Fig. 1). ` +
+    (outline
+      ? `(a) Edges of the system's rain area every 6 h, from its LPT mask file, coloured by date, with the centroid track; the open circle marks the start. ` +
+        `(b) Longitude–time track of the centroid, red during eastward propagation and blue otherwise; bars span the rain area's east–west extent. `
+      : `(a) Rain-area footprints every 6 h, coloured by date and drawn as circles of equal area (not the system's real shape${src.outlines ? "; its outline has not been extracted yet" : "; real outlines are available for the IMERG V7 database"}), with the centroid track; the open circle marks the start. ` +
+        `(b) Longitude–time track of the centroid, red during eastward propagation and blue otherwise; circles are scaled to the rain-area radius. `) +
+    `(c) Centroid longitude. (d) Zonal speed of the centroid (centred difference over ±12 h). (e) Eastward-propagation periods from the LPT ` +
+    `MJO list: ${facts.join("; ")}. Light red shading in (b)–(d) marks the same periods.`);
 }
 
 function nearest(arr, t) { return d3.least(arr, (d) => Math.abs(d.t - t)); }

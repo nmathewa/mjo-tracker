@@ -12,6 +12,13 @@ Website showing MJO tracks from several tracking methods, growing into live fore
   reduced to one of two shapes: a daily RMM-space index, or tracked systems in lon/lat/time
   (with `eprop` eastward-propagation segments and an optional full `track`). Adding a method
   = a loader here + a manifest entry + a colour token.
+- `pipeline/lpt.py` — LPT sources (`imerg` = IMERG V7 1998–Aug 2026, default; `tmpa` = Kerns & Chen 2020).
+  IMERG tracking periods overlap by a month; duplicates are resolved by keeping the longest copy.
+- `pipeline/outlines.py` — real rain-area outlines for IMERG MJO systems: reads 6-hourly slices of the
+  per-system mask NetCDFs (50–350 MB each) over HTTP range requests (h5py+fsspec, ssl off — the server's
+  TLS chain is incomplete), contours mask>0, simplifies, writes `site/data/outlines/imerg/<id>.json`.
+  Resumable; ~20 s/system.
+- `data/raw/imerg_v7/` — IMERG V7 track files and MJO/non-MJO lists.
 - `data/raw/` — BoM `rmm.74toRealtime.txt`; LPT MJO list + all 20 `lpt_systems_tmpa_*.txt`
   track files (Jun 1998–Jun 2018) from the Kerns & Chen 2020 database,
   https://orca.atmos.washington.edu/data/lpt/ (kc2020/20_72h/thresh12/systems/). Track files number
@@ -41,5 +48,6 @@ Website showing MJO tracks from several tracking methods, growing into live fore
   composites) — always labelled as such.
 - A system can have several `eprop` segments; the LPT list has one row per segment.
 - RMM ENSO removal stops after 2013-12-31 (BoM).
-- Rain areas are drawn as circles of equal area, not real shapes (real masks exist upstream).
-- LPT tracks cover Jun 1998–Jun 2018 only (TMPA); say so wherever LPT appears.
+- Detail-figure outlines are real mask edges (IMERG); the map's moving discs and TMPA footprints are
+  equal-area circles — label them so.
+- State the coverage of the LPT source shown (IMERG Jan 1998–Aug 2026, TMPA Jun 1998–Jun 2018).

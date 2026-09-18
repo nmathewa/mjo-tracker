@@ -4,9 +4,9 @@ Every tracking method is converted to one of two shapes the site knows how to dr
 
 - a daily index in RMM phase space (rmm.json), plus the events detected on it
   (rmm_events.json);
-- tracked systems in longitude/latitude/time (lpt_mjo.json), each with its
-  eastward-propagation segment and, where the raw data has it, the full
-  centroid track.
+- tracked systems in longitude/latitude/time (lpt_mjo_<source>.json, and the
+  non-MJO systems in lpt_other/<source>/<year>.json), each with its
+  eastward-propagation segments and its centroid track (see lpt.py).
 
 manifest.json lists the methods, their coverage and their sources, so the page
 never hard-codes what data exists. Adding a method means adding a loader here
@@ -25,6 +25,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from lpt import SOURCES
+
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
 OUT = ROOT / "site" / "data"
@@ -33,8 +35,6 @@ OUT = ROOT / "site" / "data"
 RMM_URL = "https://www.bom.gov.au/clim_data/IDCKGEM000/rmm.74toRealtime.txt"
 RMM_FILE = RAW / "rmm.74toRealtime.txt"
 RMM_START = "1979-01-01"  # the 1978 OLR gap ends here
-LPT_LIST = RAW / "mjo_lpt_list.txt"
-LPT_TRACKS = sorted(RAW.glob("lpt_systems_*.txt"))
 
 # RMM event rule. Kept deliberately simple and stated on the page.
 EVENT_AMP = 1.0          # active when amplitude >= this
@@ -115,92 +115,6 @@ def phase_of(angle_rad):
     return int(np.floor((np.degrees(angle_rad) + 180) / 45) % 8) + 1
 
 
-def load_lpt_list(path=LPT_LIST):
-    lpt = pd.read_csv(path, sep=r"\s+")
-    for c in ["begin", "end", "eprop_begin", "eprop_end"]:
-        lpt[c] = pd.to_datetime(lpt[c].astype(str), format="%Y%m%d%H")
-    return lpt
-
-
-def load_lpt_tracks(paths=LPT_TRACKS):
-    """{(season_year, lpt_index): DataFrame(time, area, lat, lon)} from lpt_systems_*.txt.
-
-    Each file covers one June–June season and numbers its systems from 0, so the
-    season's first year (from the file name) is part of the key, matching
-    begin_year in the MJO list."""
-    tracks = {}
-    for path in paths:
-        year = int(re.search(r"_(\d{4})\d{6}_", path.name).group(1))
-        cur, rows = None, []
-        for line in path.read_text().splitlines()[2:]:
-            parts = line.split()
-            if not parts:
-                continue
-            if parts[0] == "LPT":
-                if cur is not None:
-                    tracks[cur] = rows
-                cur, rows = (year, f"{float(parts[1]):.4f}"), []
-            else:
-                rows.append((pd.to_datetime(parts[0], format="%Y%m%d%H"),
-                             float(parts[1]), float(parts[2]), float(parts[3])))
-        if cur is not None:
-            tracks[cur] = rows
-    return {k: pd.DataFrame(v, columns=["time", "area", "lat", "lon"]) for k, v in tracks.items()}
-
-
-def compact_track(tr):
-    """6-hourly centroid track as {t0, p: [[hours since t0, lat, lon, area 1e3 km2], ...]}."""
-    tr = tr[tr.time.dt.hour % 6 == 0]
-    t0 = tr.time.iloc[0]
-    return {"t0": iso(t0), "p": [
-        [int((t - t0) / pd.Timedelta("1h")), round(la, 2), round(lo, 2), round(a / 1e3)]
-        for t, a, la, lo in tr.itertuples(index=False)]}
-
-
-def lpt_systems(lpt, tracks):
-    """MJO LPT systems, one entry each. A system can have several eastward-propagation
-    segments; the list has one row per segment."""
-    out = []
-    for (year, index), g in lpt.groupby(["begin_year", "lpt_index"], sort=False):
-        r = g.iloc[0]
-        lid = f"{index:.4f}"
-        sysd = {
-            "id": f"LPT-{year}-{lid}",
-            "lpt_index": lid,
-            "begin": iso(r.begin), "end": iso(r.end),
-            "duration_days": round(float(r.duration), 2),
-            "eprop": [{
-                "begin": iso(e.eprop_begin), "end": iso(e.eprop_end),
-                "lon_begin": round(float(e.eprop_lon_begin), 1),
-                "lon_end": round(float(e.eprop_lon_end), 1),
-                "speed_ms": round(float(e.eprop_spd), 2),
-                "days": round(float(e.eprop_dur), 2),
-            } for e in g.itertuples()],
-        }
-        tr = tracks.get((year, lid))
-        if tr is not None and tr.time.iloc[0] == r.begin:
-            sysd["track"] = compact_track(tr)
-        out.append(sysd)
-    return out
-
-
-def lpt_other(lpt, tracks, min_days=3):
-    """Every tracked LPT system that is not on the MJO list (context on the map).
-    Systems shorter than min_days are dropped."""
-    mjo = {(y, f"{i:.4f}") for y, i in zip(lpt.begin_year, lpt.lpt_index)}
-    out = []
-    for (year, lid), tr in sorted(tracks.items(), key=lambda kv: kv[1].time.iloc[0]):
-        if (year, lid) in mjo:
-            continue
-        days = (tr.time.iloc[-1] - tr.time.iloc[0]) / pd.Timedelta("1D")
-        if days < min_days:
-            continue
-        out.append({"id": f"LPT-{year}-{lid}", "lpt_index": lid,
-                    "begin": iso(tr.time.iloc[0]), "end": iso(tr.time.iloc[-1]),
-                    "duration_days": round(days, 2), "track": compact_track(tr)})
-    return out
-
-
 def iso(t):
     return f"{t:%Y-%m-%dT%H:%MZ}"
 
@@ -226,15 +140,29 @@ def main():
     write("rmm.json", {"start": f"{rmm.index[0]:%Y-%m-%d}", "rmm1": r(rmm.rmm1), "rmm2": r(rmm.rmm2)})
     write("rmm_events.json", events)
 
-    lpt = load_lpt_list()
-    tracks = load_lpt_tracks()
-    systems = lpt_systems(lpt, tracks)
-    others = lpt_other(lpt, tracks)
-    write("lpt_mjo.json", systems)
-    write("lpt_other.json", others)
-    missing = [s["id"] for s in systems if "track" not in s]
-    if missing:
-        print(f"warning: {len(missing)} MJO LPT systems have no track: {missing[:5]}...")
+    lpt_sources = []
+    for key, src in SOURCES.items():
+        mjo, others = src["load"]()
+        write(f"lpt_mjo_{key}.json", mjo)
+        by_year = {}
+        for o in others:
+            by_year.setdefault(o["begin"][:4], []).append(o)
+        odir = OUT / "lpt_other" / key
+        odir.mkdir(parents=True, exist_ok=True)
+        for old in odir.glob("*.json"):
+            old.unlink()
+        for y, recs in by_year.items():
+            (odir / f"{y}.json").write_text(json.dumps(recs, separators=(",", ":")))
+        print(f"wrote {len(others)} other {key} systems in {len(by_year)} yearly files")
+        missing = sum("track" not in s for s in mjo)
+        if missing:
+            print(f"warning: {missing} {key} MJO systems have no track")
+        lpt_sources.append({
+            "id": key, "label": src["label"], "long_name": src["long_name"], "source_url": src["source_url"],
+            "coverage": [min(s["begin"] for s in mjo)[:10], max(s["end"] for s in mjo)[:10]],
+            "n_systems": len(mjo), "n_other": len(others),
+            "other_years": sorted(by_year), "outlines": src["outlines"],
+        })
 
     write("manifest.json", {
         "built": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
@@ -255,13 +183,7 @@ def main():
             {
                 "id": "lpt", "name": "LPT tracking", "kind": "systems",
                 "long_name": "Large-scale Precipitation Tracking (Kerns & Chen 2016, 2020)",
-                "coverage": [systems[0]["begin"][:10], systems[-1]["end"][:10]],
-                "source": "TMPA 3B42 rain (Kerns & Chen 2020 database)",
-                "source_url": "https://orca.atmos.washington.edu/data/lpt/index.html",
-                "files": ["lpt_mjo.json", "lpt_other.json"],
-                "n_systems": len(systems),
-                "n_full_tracks": sum("track" in s for s in systems),
-                "n_other": len(others),
+                "sources": lpt_sources,
             },
         ],
     })

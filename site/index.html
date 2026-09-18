@@ -15,7 +15,7 @@
   <header class="top">
     <p class="eyebrow">Tropical intraseasonal variability · Data archive</p>
     <h1>MJO Track Archive</h1>
-    <p class="subtitle">Madden–Julian Oscillation events from the RMM index (1979–present) and Large-scale Precipitation Tracking (Jun 1998 – Jun 2018)</p>
+    <p class="subtitle">Madden–Julian Oscillation events from the RMM index (1979–present) and Large-scale Precipitation Tracking (<span class="lpt-cov">Jan 1998 – Aug 2026</span>)</p>
     <div class="abstract">
       <p><span class="run-in">Summary.</span> The Madden–Julian Oscillation (MJO) is the dominant mode of tropical intraseasonal
         variability: a planetary-scale envelope of enhanced rainfall that travels eastward along the equator, returning
@@ -50,6 +50,7 @@
       <legend>Methods</legend>
       <label class="chip rmm"><input type="checkbox" name="method" value="rmm" checked><span class="glyph" aria-hidden="true"></span> Wind + cloud index <abbr title="Real-time Multivariate MJO index">RMM</abbr></label>
       <label class="chip lpt"><input type="checkbox" name="method" value="lpt" checked><span class="glyph" aria-hidden="true"></span> Rain-band tracking <abbr title="Large-scale Precipitation Tracking">LPT</abbr></label>
+      <select id="lpt-src" aria-label="LPT rainfall dataset"></select>
     </fieldset>
   </nav>
 
@@ -57,7 +58,7 @@
     <h2 id="tl-h">Archive overview <span class="sub">drag or click to choose a window</span></h2>
     <div id="timeline" class="chart"></div>
     <p class="caption">RMM amplitude, 1979 to present, smoothed to the bin width shown (dashed line: amplitude 1, the usual
-      threshold for an active MJO), and the periods covered by LPT MJO systems (ticks; Jun 1998 – Jun 2018 only). The
+      threshold for an active MJO), and the periods covered by LPT MJO systems (ticks; <span class="lpt-cov"></span>). The
       highlighted interval is the window shown in all other figures.</p>
   </section>
 
@@ -72,7 +73,7 @@
       <h2 id="hov-h">Longitude–time (Hovmöller) diagram</h2>
       <div id="hovmoller" class="chart"></div>
       <p class="caption">Longitude–time diagram of the window; time increases downward, so eastward propagation runs down
-        and to the right. LPT lines are centroid tracks of tracked rain systems (available Jun 1998 – Jun 2018 only; click one for details). RMM is an index,
+        and to the right. LPT lines are centroid tracks of tracked rain systems (available <span class="lpt-cov"></span>; click one for details). RMM is an index,
         not a location: its active days (amplitude ≥ 1) are placed at the <em>approximate</em> longitude of their phase,
         from the Wheeler &amp; Hendon (2004) composites. The dotted line is a 5&nbsp;m&nbsp;s⁻¹ eastward reference.</p>
     </section>
@@ -116,7 +117,7 @@
       <h2 id="cite-h">How to cite and data sources</h2>
       <p>This site redistributes and visualises published datasets; please cite the original work. For the RMM index, cite
         Wheeler &amp; Hendon (2004) and acknowledge the Australian Bureau of Meteorology, which publishes the daily
-        values. For LPT systems, cite Kerns &amp; Chen (2016) for the method and Kerns &amp; Chen (2020) for the TMPA-based
+        values. For LPT systems, cite Kerns &amp; Chen (2016) for the method and Kerns &amp; Chen (2020) for the
         MJO database. To refer to a particular view on this site, give its full address (it encodes the window,
         methods and selected system) and the date of access: <span id="cite-url" class="mono"></span>.</p>
     </section>

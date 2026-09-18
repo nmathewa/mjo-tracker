@@ -2,7 +2,7 @@
 // their real rain-area size, and an optional layer of non-MJO LPT systems for context.
 // The current time is broadcast as a "mjo:time" event so the Hovmöller and phase
 // diagram can show a matching cursor (charts.js).
-import { DAY_MS, fmtDay, phaseLon, PHASE_REGION, parseDay, hashFor, loadOthers, loadLand50 } from "./data.js";
+import { DAY_MS, fmtDay, phaseLon, PHASE_REGION, parseDay, hashFor, loadOthers, loadLand50, coverageText } from "./data.js";
 import { showTip, hideTip, describe } from "./charts.js";
 
 const LAT = 40;          // map shows ±LAT at the widest zoom
@@ -88,15 +88,15 @@ export function drawMap(sel, data, state) {
     const link = (from, text) => `<a class="btn" href="${hashFor(parseDay(from), 120, new Set([...state.methods, "lpt"]))}">${text}</a>`;
     root.append("div").attr("class", "map-empty").html(
       `<p><b>${outside ? "No LPT tracks for this period." : "No MJO rain systems in this window."}</b> ` +
-      `${outside ? "The LPT database shown here covers Jun 1998 – Jun 2018." : ""}</p>` +
-      `<p>${link("2017-11-01", "Last season: Nov 2017 – Feb 2018")} ${link("2011-10-01", "DYNAMO, Oct 2011")} ${link("2015-11-01", "El Niño winter 2015–16")}</p>`);
+      `${outside ? `The ${data.lptSrc.label} LPT database covers ${coverageText(data.lptSrc)}.` : ""}</p>` +
+      `<p>${link(d3.utcFormat("%Y-%m-%d")(new Date(d3.max(data.lpt, (s) => s.t1) - 120 * DAY_MS)), "Latest LPT systems")} ${link("2011-10-01", "DYNAMO, Oct 2011")} ${link("2015-11-01", "El Niño winter 2015–16")}</p>`);
   }
 
   // ---- non-MJO systems (lazy)
   async function drawOthers() {
     gOther.selectAll("*").remove();
     if (!ui.showOthers) return;
-    const others = (await loadOthers()).filter((s) => inWindow(s, state));
+    const others = (await loadOthers(data.lptSrc, state.t0, state.t1)).filter((s) => inWindow(s, state));
     gOther.selectAll("path").data(others).join("path").attr("class", "lpt-other tip-target")
       .attr("d", (s) => trackLine(s.track))
       .on("mousemove click", (ev, s) => showTip(ev, `<b>LPT system ${s.lpt_index}</b> (not MJO)<br>${fmtDay(s.t0)} – ${fmtDay(s.t1)} (${Math.round(s.duration_days)} d)`))
@@ -227,7 +227,7 @@ export function drawMap(sel, data, state) {
     ui.stopBtn = bPlay;
   }
   root.append("p").attr("class", "caption").html("Centroid tracks of MJO rain systems from Large-scale Precipitation Tracking " +
-    "(Kerns &amp; Chen 2020; TMPA rainfall, Jun 1998 – Jun 2018 only); open circles mark where each system began. " +
+    `(Kerns &amp; Chen; ${data.lptSrc.label}, ${coverageText(data.lptSrc)}); open circles mark where each system began. ` +
     "Pressing ▶ plays the window: discs show each system's rain area at that moment as a circle of equal area, not its real shape, " +
     "and the shaded band marks the <em>approximate</em> longitude of the current RMM phase when the MJO is active. " +
     "Drag to pan, scroll or +/− to zoom; click a track for that system's details.");

@@ -1,13 +1,14 @@
 // Page state, URL hash, and wiring between the views.
-// The hash (#from=2011-10-01&days=120&m=rmm,lpt) makes every view a shareable link.
-import { loadAll, parseDay, addDays, DAY_MS, fmtRange, hashFor } from "./data.js";
+// The hash (#from=2011-10-01&days=120&m=rmm,lpt&src=imerg&sel=…) makes every view a shareable link.
+import { loadAll, loadLpt, parseDay, addDays, DAY_MS, fmtRange, hashFor, coverageText } from "./data.js";
 import { nowSentence } from "./now.js";
 import { drawTimeline, drawHovmoller, drawPhase, drawList, hideTip } from "./charts.js";
 import { drawMap } from "./map.js";
 import { drawDetail } from "./detail.js";
 
 const MIN_DAYS = 30, MAX_DAYS = 365, DEFAULT_DAYS = 120;
-const data = await loadAll().catch((err) => {
+const hashParam = (k) => new URLSearchParams(location.hash.slice(1)).get(k);
+const data = await loadAll(hashParam("src")).catch((err) => {
   document.querySelector(".grid").innerHTML = `<p class="card">Could not load data: ${err.message}</p>`;
   throw err;
 });
@@ -42,7 +43,8 @@ function readHash() {
 // collapses into one entry.
 let lastBurst = 0;
 function writeHash(push) {
-  const h = hashFor(state.t0, Math.round((state.t1 - state.t0) / DAY_MS), state.methods) + (selected ? `&sel=${selected}` : "");
+  const h = hashFor(state.t0, Math.round((state.t1 - state.t0) / DAY_MS), state.methods) +
+    `&src=${data.lptSrc.id}` + (selected ? `&sel=${selected}` : "");
   if (h === location.hash) return;
   const now = Date.now(), coalesce = push === "burst" && now - lastBurst < 800;
   lastBurst = push === "burst" ? now : 0;
@@ -85,8 +87,25 @@ function fitHovmoller() {
 }
 
 // the selected LPT system (details panel); part of the URL as &sel=
-let selected = new URLSearchParams(location.hash.slice(1)).get("sel");
-const byId = new Map(data.lpt.map((s) => [s.id, s]));
+let selected = hashParam("sel");
+let byId = new Map(data.lpt.map((s) => [s.id, s]));
+
+// switch the LPT database (IMERG V7 / TMPA); selection ids differ between them
+async function setSource(id, push = true) {
+  const src = data.lptSources.find((x) => x.id === id);
+  if (!src || src === data.lptSrc) return;
+  data.lptSrc = src;
+  data.lpt = await loadLpt(src.id);
+  byId = new Map(data.lpt.map((s) => [s.id, s]));
+  if (!byId.has(selected)) selected = null;
+  document.getElementById("lpt-src").value = src.id;
+  writeAbout();
+  render(push);
+}
+const srcSel = document.getElementById("lpt-src");
+srcSel.innerHTML = data.lptSources.map((x) => `<option value="${x.id}">${x.label}, ${coverageText(x)}</option>`).join("");
+srcSel.value = data.lptSrc.id;
+srcSel.addEventListener("change", () => setSource(srcSel.value));
 function renderDetail() {
   drawDetail("#detail", data, byId.get(selected), {
     onClose: () => select(null),
@@ -189,16 +208,22 @@ tl.addEventListener("keydown", (ev) => {
 window.addEventListener("hashchange", () => {
   const s = readHash();
   if (s) {
-    selected = new URLSearchParams(location.hash.slice(1)).get("sel");
-    state.methods = s.methods; setWindow(s.t0, s.t1, false);
+    selected = hashParam("sel");
+    state.methods = s.methods;
+    const src = hashParam("src");
+    if (src && src !== data.lptSrc.id) { [state.t0, state.t1] = clampWindow(s.t0, s.t1); setSource(src, false); }
+    else setWindow(s.t0, s.t1, false);
   }
 });
 
 // data and methods (the About content, laid out as a methods section)
-const [rmmM, lptM] = data.manifest.methods;
-const r = rmmM.event_rule;
-const cite = (id, txt) => `<a href="#ref-${id}">${txt}</a>`;
-document.getElementById("about").innerHTML = `
+function writeAbout() {
+  const [rmmM, lptM] = data.manifest.methods, src = data.lptSrc;
+  const r = rmmM.event_rule;
+  const cite = (id, txt) => `<a href="#ref-${id}">${txt}</a>`;
+  const srcRows = data.lptSources.map((x) => `<li><b>${x.label}</b>${x === src ? " (shown)" : ""}: ${x.long_name},
+    ${coverageText(x)}; ${x.n_systems} MJO systems and ${x.n_other} other systems lasting ≥ 3 days${x.outlines ? "; real rain-area outlines from the per-system mask files" : ""}.</li>`).join("");
+  document.getElementById("about").innerHTML = `
   <h3>RMM index</h3>
   <p>The ${rmmM.long_name.replace("(Wheeler & Hendon 2004)", `(${cite("wh04", "Wheeler &amp; Hendon 2004")})`)} is used daily
     from ${rmmM.coverage.join(" to ")}, as published by the <a href="${rmmM.source}">Australian Bureau of Meteorology</a>.
@@ -207,21 +232,24 @@ document.getElementById("about").innerHTML = `
     contains ${rmmM.n_events} such events.</p>
   <h3>Large-scale Precipitation Tracking</h3>
   <p>${lptM.long_name.replace("(Kerns & Chen 2016, 2020)", `(${cite("kc16", "Kerns &amp; Chen 2016")}, ${cite("kc20", "2020")})`)}
-    follows contiguous areas of heavy time-averaged rain; here from ${lptM.source}, ${lptM.coverage.join(" to ")}.
-    The archive includes ${lptM.n_systems} MJO systems with full centroid tracks, plus ${lptM.n_other} other (non-MJO)
-    systems lasting ≥ 3 days, shown on the map when switched on. A system can have several eastward-propagation
-    segments, and the event table lists one row per segment. Data: <a href="${lptM.source_url}">LPT data access
-    (Kerns, University of Washington)</a>.</p>
+    follows contiguous areas of heavy time-averaged rain. Two databases are available (switch with the selector next to the
+    LPT button); both come from <a href="${src.source_url}">LPT data access (Kerns, University of Washington)</a>:</p>
+  <ul>${srcRows}</ul>
+  <p>The non-MJO systems are shown on the map when switched on. A system can have several eastward-propagation
+    segments, and the event table lists one row per segment. The two databases use different rainfall products and
+    tracking settings, so their systems and identifiers differ.</p>
   <h3>Caveats</h3>
   <ul class="caveats">
     <li><b>Approximate RMM longitude.</b> RMM is an index, not a location. On the Hovmöller diagram and map its days are
       placed at the longitude where each phase's rain usually sits (${cite("wh04", "Wheeler &amp; Hendon 2004")} composites),
       so read the RMM marks as approximate.</li>
-    <li><b>LPT coverage.</b> LPT tracks cover ${lptM.coverage.map((d) => d3.utcFormat("%b %Y")(parseDay(d))).join(" – ")} only
-      (TMPA rainfall); windows outside that period show RMM alone.</li>
-    <li><b>Rain-area discs.</b> Rain areas are drawn as circles of equal area, not the systems' real shapes.</li>
+    <li><b>LPT coverage.</b> The ${src.label} tracks shown cover ${coverageText(src)} only; windows outside that period show RMM alone.</li>
+    <li><b>Rain areas.</b> ${src.outlines ? "Outlines in the system detail figure are the real mask edges, every 6 h; the map's moving discs are circles of equal area." : "Rain areas are drawn as circles of equal area, not the systems' real shapes (real outlines are available for IMERG V7)."}</li>
     <li><b>ENSO removal.</b> ${rmmM.note}</li>
   </ul>`;
+  document.querySelectorAll(".lpt-cov").forEach((el) => { el.textContent = coverageText(src); });
+}
+writeAbout();
 document.getElementById("cite-url").textContent = location.href.split("#")[0];
 document.getElementById("now").innerHTML = nowSentence(data.days);
 document.getElementById("built").textContent = `Data built ${data.manifest.built}.`;

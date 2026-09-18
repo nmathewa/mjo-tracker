@@ -1,7 +1,7 @@
 // The five views. Each draw function clears its container and redraws from
 // (data, state); state = { t0, t1, methods: Set }. Marks carry data-id so
 // hovering one highlights the same event everywhere (see main.js).
-import { addDays, DAY_MS, fmtDay, fmtRange, phaseLon, PHASE_REGION, REGIONS, hashFor, parseDay } from "./data.js";
+import { coverageText, addDays, DAY_MS, fmtDay, fmtRange, phaseLon, PHASE_REGION, REGIONS, hashFor, parseDay } from "./data.js";
 
 const tip = document.getElementById("tip");
 export function showTip(ev, html) {
@@ -248,7 +248,7 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
     ] : []),
     { swatch: '<line class="guide" x1="3" y1="3" x2="25" y2="11"/>', label: "5 m s⁻¹ eastward reference" },
     ...(sys.length ? [] : [
-      { cls: "lpt-only", label: `<span class="dim">No LPT systems here · LPT tracks cover Jun 1998 – Jun 2018 ·</span> ${lptLink(state)}` },
+      { cls: "lpt-only", label: `<span class="dim">No LPT systems here · ${data.lptSrc.label} tracks cover ${coverageText(data.lptSrc)} ·</span> ${lptLink(state)}` },
     ]),
   ]);
 }

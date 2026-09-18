@@ -1,15 +1,20 @@
 // Loads the JSON written by pipeline/build.py and puts it in one shape for the charts.
 const DAY = 86400000;
 
-export async function loadAll() {
-  const get = (f) => fetch(`data/${f}`).then((r) => {
-    if (!r.ok) throw new Error(`${f}: ${r.status}`);
-    return r.json();
-  });
-  const [manifest, rmm, rmmEvents, lpt, land] = await Promise.all([
-    get("manifest.json"), get("rmm.json"), get("rmm_events.json"), get("lpt_mjo.json"),
+const get = (f) => fetch(`data/${f}`).then((r) => {
+  if (!r.ok) throw new Error(`${f}: ${r.status}`);
+  return r.json();
+});
+
+// srcId picks the LPT database (manifest.methods[1].sources); unknown ids fall back to the first
+export async function loadAll(srcId) {
+  const [manifest, rmm, rmmEvents, land] = await Promise.all([
+    get("manifest.json"), get("rmm.json"), get("rmm_events.json"),
     fetch("vendor/land-110m.json").then((r) => r.json()),
   ]);
+  const lptSources = manifest.methods.find((m) => m.id === "lpt").sources;
+  const lptSrc = lptSources.find((x) => x.id === srcId) ?? lptSources[0];
+  const lpt = await loadLpt(lptSrc.id);
 
   const t0 = parseDay(rmm.start);
   const days = rmm.rmm1.map((r1, i) => {
@@ -32,15 +37,27 @@ export async function loadAll() {
     const i0 = Math.round((e.t0 - t0) / DAY), i1 = Math.round((e.t1 - t0) / DAY);
     for (let i = i0; i < i1; i++) days[i].event = e.id;
   }
-  for (const s of lpt) {
-    s.method = "lpt";
-    s.t0 = new Date(s.begin);
-    s.t1 = new Date(s.end);
-    for (const e of s.eprop) { e.t0 = new Date(e.begin); e.t1 = new Date(e.end); }
-    if (s.track) s.track = unpackTrack(s.track);
-  }
-  return { manifest, days, t0, rmmEvents, lpt, land };
+  return { manifest, days, t0, rmmEvents, lpt, land, lptSources, lptSrc };
 }
+
+// MJO systems of one LPT database, prepared once and cached
+const lptCache = {};
+export function loadLpt(id) {
+  lptCache[id] ??= get(`lpt_mjo_${id}.json`).then((list) => {
+    for (const s of list) {
+      s.method = "lpt";
+      s.t0 = new Date(s.begin);
+      s.t1 = new Date(s.end);
+      for (const e of s.eprop) { e.t0 = new Date(e.begin); e.t1 = new Date(e.end); }
+      if (s.track) s.track = unpackTrack(s.track);
+    }
+    return list;
+  });
+  return lptCache[id];
+}
+
+// "Jan 1998 – Aug 2026"
+export const coverageText = (src) => src.coverage.map((d) => d3.utcFormat("%b %Y")(parseDay(d))).join(" – ");
 
 // {t0, p: [[hours, lat, lon, area 1e3 km2], ...]} -> [{ t, lat, lon, area (km2) }]
 function unpackTrack({ t0, p }) {
@@ -48,13 +65,32 @@ function unpackTrack({ t0, p }) {
   return p.map(([h, lat, lon, a]) => ({ t: new Date(base + h * 3600e3), lat, lon, area: a * 1e3 }));
 }
 
-// Non-MJO LPT systems, loaded only when the map asks for them.
-let othersP = null;
-export function loadOthers() {
-  othersP ??= fetch("data/lpt_other.json").then((r) => r.json()).then((list) => list.map((s) => ({
-    ...s, method: "lpt-other", t0: new Date(s.begin), t1: new Date(s.end), track: unpackTrack(s.track),
-  })));
-  return othersP;
+// Non-MJO LPT systems, stored by start year and loaded only for the years a window needs
+// (plus the year before, for systems that started earlier).
+const otherCache = {};
+export async function loadOthers(src, t0, t1) {
+  const years = d3.range(t0.getUTCFullYear() - 1, t1.getUTCFullYear() + 1).map(String)
+    .filter((y) => src.other_years.includes(y));
+  const lists = await Promise.all(years.map((y) => {
+    otherCache[`${src.id}/${y}`] ??= get(`lpt_other/${src.id}/${y}.json`).then((list) => list.map((s) => ({
+      ...s, method: "lpt-other", t0: new Date(s.begin), t1: new Date(s.end), track: unpackTrack(s.track),
+    })));
+    return otherCache[`${src.id}/${y}`];
+  }));
+  return lists.flat();
+}
+
+// Real rain-area outlines of one system (pipeline/outlines.py), or null if not extracted.
+// -> [{ t, rings: [[[lon, lat], ...], ...] }]
+export async function loadOutline(src, id) {
+  if (!src.outlines) return null;
+  const r = await fetch(`data/outlines/${src.id}/${id}.json`);
+  if (!r.ok) return null;
+  const d = await r.json(), base = new Date(d.t0).getTime();
+  return d.h.map((h, i) => ({
+    t: new Date(base + h * 3600e3),
+    rings: d.rings[i].map((flat) => d3.range(0, flat.length, 2).map((k) => [flat[k], flat[k + 1]])),
+  }));
 }
 
 // Higher-resolution coastlines for zoomed-in maps, loaded on first zoom.
