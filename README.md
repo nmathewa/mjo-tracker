@@ -1,5 +1,7 @@
 # MJO Track Archive
 
+Nirmal Mathew Alex, Florida Institute of Technology
+
 Madden–Julian Oscillation events from two tracking methods, side by side:
 
 - **RMM index** (Wheeler & Hendon 2004), daily 1979–present, from the Australian Bureau of Meteorology.

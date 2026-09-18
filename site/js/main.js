@@ -251,6 +251,7 @@ function writeAbout() {
 }
 writeAbout();
 document.getElementById("cite-url").textContent = location.href.split("#")[0];
+document.getElementById("cite-date").textContent = d3.utcFormat("%-d %B %Y")(new Date());
 document.getElementById("now").innerHTML = nowSentence(data.days);
 document.getElementById("built").textContent = `Data built ${data.manifest.built}.`;
 

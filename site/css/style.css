@@ -54,7 +54,7 @@ h3 { font-size: 1rem; font-weight: 600; margin: 1.2em 0 0.3em; }
 
 /* ---- title block */
 .top { padding: 34px 0 18px; border-bottom: 2px solid var(--ink); margin-bottom: 0; }
-.subtitle { margin: 0 0 18px; font-size: 1.15rem; font-style: italic; color: var(--muted); max-width: 60ch; line-height: 1.4; }
+.subtitle { margin: 0 0 8px; font-size: 1.15rem; font-style: italic; color: var(--muted); max-width: 60ch; line-height: 1.4; }
 .abstract { max-width: 78ch; border-top: 1px solid var(--line); padding-top: 12px; }
 .abstract p { margin: 0 0 10px; text-align: left; }
 .run-in { font-weight: 700; }
@@ -333,3 +333,5 @@ body { counter-reset: fig; }
 .is-hl .lpt-track, .is-hl .seg { stroke: var(--hl) !important; }
 .swatch-mjo, .swatch-life { display: inline-block; width: 18px; height: 0; border-top: 3px solid var(--lpt); vertical-align: middle; margin-left: 4px; }
 .swatch-life { border-top-width: 1.3px; opacity: 0.5; }
+.byline { margin: 0 0 18px; font-size: 0.95rem; color: var(--ink); }
+.byline .affil { color: var(--muted); font-style: italic; }
