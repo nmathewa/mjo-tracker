@@ -254,6 +254,23 @@ document.getElementById("cite-url").textContent = location.href.split("#")[0];
 document.getElementById("now").innerHTML = nowSentence(data.days);
 document.getElementById("built").textContent = `Data built ${data.manifest.built}.`;
 
+// colour theme: auto (system) → light → dark; charts redraw because some colours are computed
+const themeBtn = document.getElementById("theme");
+const THEMES = { auto: "◐ Auto", light: "☀ Light", dark: "☾ Dark" };
+function setTheme(t, save = true) {
+  if (t === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  themeBtn.textContent = THEMES[t];
+  themeBtn.setAttribute("aria-label", `Colour theme: ${t}. Click to change.`);
+  if (save) try { localStorage.setItem("theme", t); } catch {}
+}
+setTheme(document.documentElement.dataset.theme ?? "auto", false);
+themeBtn.addEventListener("click", () => {
+  const order = ["auto", "light", "dark"];
+  setTheme(order[(order.indexOf(document.documentElement.dataset.theme ?? "auto") + 1) % 3]);
+  render();
+});
+
 // charts are sized to their containers, so redraw when the width changes
 let lastW = innerWidth, resizeTimer;
 window.addEventListener("resize", () => {

@@ -323,3 +323,5 @@ body { counter-reset: fig; }
 .foot.outline { stroke-width: 1; stroke-opacity: 0.85; fill: none; }
 .extent-bar { stroke-width: 2.5; stroke-opacity: 0.55; stroke-linecap: round; }
 #lpt-src { font-size: 0.8rem; padding: 3px 6px; max-width: 16rem; }
+
+.theme-btn { font-size: 0.8rem; padding: 4px 10px; white-space: nowrap; }
