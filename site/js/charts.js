@@ -187,16 +187,13 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
     .on("mousemove click", (ev, d) => showTip(ev, `<b>${fmtDay(d.date)}</b><br>RMM phase ${d.phase} (${PHASE_REGION[d.phase]})<br>amplitude ${d.amp.toFixed(2)}`))
     .on("mouseleave", hideTip);
 
-  // LPT: full track (thin) and eastward-propagation segments (thick)
+  // LPT: full centroid tracks, where loaded
   const sys = data.lpt.filter((s) => inWindow(s.t0, s.t1, state));
+  const tracked = sys.filter((s) => s.track);
   const gL = plot.append("g").attr("class", "lpt-only");
-  gL.selectAll("path").data(sys.filter((s) => s.track)).join("path").attr("class", "lpt-track mark")
-    .attr("data-id", (s) => s.id).attr("d", (s) => d3.line().x((p) => x(p.lon)).y((p) => y(p.t))(s.track));
-  gL.selectAll("g").data(sys).join("g").attr("class", "mark tip-target").attr("data-id", (s) => s.id)
-    .on("mousemove click", (ev, s) => showTip(ev, describe(s))).on("mouseleave", hideTip)
-    .selectAll("line").data((s) => s.eprop).join("line").attr("class", "lpt-seg")
-    .attr("x1", (e) => x(e.lon_begin)).attr("y1", (e) => y(e.t0))
-    .attr("x2", (e) => x(e.lon_end)).attr("y2", (e) => y(e.t1));
+  gL.selectAll("path").data(tracked).join("path").attr("class", "lpt-track mark tip-target")
+    .attr("data-id", (s) => s.id).attr("d", (s) => d3.line().x((p) => x(p.lon)).y((p) => y(p.t))(s.track))
+    .on("mousemove click", (ev, s) => showTip(ev, describe(s))).on("mouseleave", hideTip);
 
   // speed guide: 5 m/s from the top-left of the Indian Ocean
   const lon0 = 60, t0 = addDays(state.t0, 2), sp = 5 * 86400 / 111e3; // deg/day
@@ -205,17 +202,17 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
   guide.append("line").attr("class", "guide").attr("x1", x(lon0)).attr("y1", y(t0)).attr("x2", x(lon0 + sp * (tEnd - t0) / DAY_MS)).attr("y2", y(tEnd));
   guide.append("text").attr("class", "halo").attr("x", x(lon0 + sp * (tEnd - t0) / DAY_MS) + 4).attr("y", y(tEnd)).attr("dy", "0.35em").text("5 m/s");
 
-  if (!rmmDays.length && !sys.length) {
+  if (!rmmDays.length && !tracked.length) {
     emptyText(svg, (m.l + W - m.r) / 2, (m.t + H - m.b) / 2, W - m.l - m.r, "No active MJO in this window");
   }
 
   // only key what is drawn; with no LPT systems here, say where they are instead
-  const nTrack = sys.filter((s) => s.track).length;
   legend(sel, [
-    ...(sys.length ? [
-      { cls: "lpt-only", swatch: '<line class="lpt-seg" x1="3" y1="3" x2="25" y2="11"/>', label: "LPT eastward segment" },
+    ...(tracked.length ? [
       { cls: "lpt-only", swatch: '<path class="lpt-track" d="M3 3c6 2 4 6 10 5s6 4 12 3"/>',
-        label: `LPT full track <span class="dim">(loaded for Jun 2011 – Jun 2012 only${nTrack ? "" : "; none here"})</span>` },
+        label: `LPT rain-band track <span class="dim">(loaded for Jun 2011 – Jun 2012 only)</span>` },
+    ] : sys.length ? [
+      { cls: "lpt-only", label: `<span class="dim">${sys.length} LPT system${sys.length > 1 ? "s" : ""} in this window (see Events); tracks are loaded for Jun 2011 – Jun 2012 only</span>` },
     ] : []),
     ...(rmmDays.length ? [
       { cls: "rmm-only", swatch: '<circle class="rmm-dot" cx="5" cy="7" r="2.5"/><circle class="rmm-dot" cx="13" cy="7" r="3.8"/><circle class="rmm-dot" cx="23" cy="7" r="5"/>',
