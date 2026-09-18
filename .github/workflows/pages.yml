@@ -1,0 +1,52 @@
+# Daily: pull the latest RMM from BoM, rebuild site/data, commit it, deploy site/ to GitHub Pages.
+# The data commit also keeps the repo active, so GitHub doesn't disable the schedule after 60 days.
+name: Update data and deploy
+
+on:
+  schedule:
+    - cron: "30 6 * * *"   # 06:30 UTC; BoM usually posts the previous day by then
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r pipeline/requirements.txt
+      - name: Fetch RMM and rebuild data
+        # a failed download keeps yesterday's data (the page flags stale data itself)
+        run: python pipeline/build.py --fetch || python pipeline/build.py
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw site/data
+          git diff --cached --quiet || git commit -m "data: RMM update $(date -u +%F)"
+          git push
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

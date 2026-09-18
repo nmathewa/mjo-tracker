@@ -65,8 +65,8 @@ export function phaseLon(angleDeg) {
 }
 
 export const PHASE_REGION = {
-  1: "W. Hemisphere & Africa", 2: "Indian Ocean", 3: "Indian Ocean", 4: "Maritime Continent",
-  5: "Maritime Continent", 6: "Western Pacific", 7: "Western Pacific", 8: "W. Hemisphere & Africa",
+  1: "Western Hemisphere and Africa", 2: "Indian Ocean", 3: "Indian Ocean", 4: "Maritime Continent",
+  5: "Maritime Continent", 6: "Western Pacific", 7: "Western Pacific", 8: "Western Hemisphere and Africa",
 };
 
 export const REGIONS = [

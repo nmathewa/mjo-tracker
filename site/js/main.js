@@ -1,6 +1,7 @@
 // Page state, URL hash, and wiring between the views.
 // The hash (#from=2011-10-01&days=120&m=rmm,lpt) makes every view a shareable link.
 import { loadAll, parseDay, addDays, DAY_MS, fmtRange, hashFor } from "./data.js";
+import { nowSentence } from "./now.js";
 import { drawTimeline, drawHovmoller, drawPhase, drawMap, drawList, hideTip } from "./charts.js";
 
 const MIN_DAYS = 30, MAX_DAYS = 365, DEFAULT_DAYS = 120;
@@ -182,6 +183,7 @@ document.getElementById("about").innerHTML = `<dl>
   <dt>Hovmöller</dt><dd>RMM is an index, not a location. Its days are placed at the longitude where each phase's
     rain usually sits (Wheeler &amp; Hendon 2004 composites), so read the orange dots as approximate.</dd>
 </dl>`;
+document.getElementById("now").innerHTML = nowSentence(data.days);
 document.getElementById("built").textContent = `Data built ${data.manifest.built}.`;
 
 // charts are sized to their containers, so redraw when the width changes

@@ -19096,3 +19096,8 @@
         2026           9           9 -0.31609365      0.74035847               7  0.80501300      Gottschalk10_method:_OLR_&_ACCESS_wind      
         2026           9          10 -0.37085673      0.26705256               8  0.45700306      Gottschalk10_method:_OLR_&_ACCESS_wind      
         2026           9          11 -0.47045872     -0.16458164               1  0.49841601      Gottschalk10_method:_OLR_&_ACCESS_wind      
+        2026           9          12 -0.62308443     -0.16940938               1  0.64570409      Gottschalk10_method:_OLR_&_ACCESS_wind      
+        2026           9          13 -0.43695787     -0.45378640               2  0.62996370      Gottschalk10_method:_OLR_&_ACCESS_wind      
+        2026           9          14 -0.53825063     -0.47452176               1  0.71755463      Gottschalk10_method:_OLR_&_ACCESS_wind      
+        2026           9          15 -0.51486266     -0.19776629               1  0.55153883      Gottschalk10_method:_OLR_&_ACCESS_wind      
+        2026           9          16 -0.52347761      0.25874785               8  0.58393431      Gottschalk10_method:_OLR_&_ACCESS_wind      

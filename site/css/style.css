@@ -185,3 +185,11 @@ button:hover, select:hover { border-color: var(--muted); }
 .empty-line a, .legend a { color: var(--lpt); font-weight: 600; white-space: nowrap; }
 .hov-card { align-self: start; }
 #timeline:focus-visible { outline-offset: 4px; border-radius: 4px; }
+
+.now {
+  margin: 12px 0 0; padding: 8px 12px; max-width: 75ch;
+  background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--rmm); border-radius: 6px;
+}
+.now-label { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.now .stale { display: block; color: var(--rmm); font-size: 0.85rem; margin-top: 2px; }
+.chip abbr { text-decoration: none; color: var(--muted); font-size: 0.78rem; font-weight: 600; }

@@ -367,7 +367,7 @@ export function drawList(sel, data, state, onPick) {
     .attr("tabindex", 0).attr("role", "button")
     .on("click", (ev, d) => onPick(d))
     .on("keydown", (ev, d) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onPick(d); } });
-  li.append("span").attr("class", (d) => `badge ${d.method}`).text((d) => d.method.toUpperCase());
+  li.append("span").attr("class", (d) => `badge ${d.method}`).attr("title", (d) => d.method === "rmm" ? "RMM index event (wind + cloud index)" : "LPT rain-band system").text((d) => d.method.toUpperCase());
   li.append("span").attr("class", "when").text((d) => fmtRange(d.t0, d.method === "rmm" ? addDays(d.t1, -1) : d.t1));
   li.append("span").attr("class", "meta").text((d) => d.method === "rmm"
     ? `${d.days} d · phase ${d.start_phase}→${d.end_phase} · max amp ${d.max_amp}`

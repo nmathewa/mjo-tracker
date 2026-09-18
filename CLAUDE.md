@@ -16,10 +16,13 @@ Website showing MJO tracks from several tracking methods, growing into live fore
   `~/phd/EXP_1d_diurnal_mse_TWP/dsets/`), LPT full tracks (only Jun 2011–Jun 2012 so far).
 - `site/` — static, no build step: `index.html`, `css/style.css`, `js/data.js` (load + phase
   geometry), `js/charts.js` (timeline, Hovmöller, phase diagram, map, list), `js/main.js`
-  (state in URL hash `#from=&days=&m=`). D3/topojson/land vendored in `site/vendor/`.
+  (state in URL hash `#from=&days=&m=`), `js/now.js` (plain-language "latest" line, RMM only). D3/topojson/land vendored in `site/vendor/`.
 
 ## Commands
-- Build data: `~/miniforge3/envs/nma/bin/python pipeline/build.py` (`--fetch` pulls latest RMM).
+- Build data: `~/miniforge3/envs/nma/bin/python pipeline/build.py` (`--fetch` pulls latest RMM from
+  `https://www.bom.gov.au/clim_data/IDCKGEM000/rmm.74toRealtime.txt`; the old `climate/mjo/graphics/`
+  URL is frozen at 2024-02-24. The fetch refuses a file older than the current one).
+- Deploy: `.github/workflows/pages.yml` — daily 06:30 UTC fetch + rebuild + commit + GitHub Pages.
 - Serve: `~/miniforge3/envs/nma/bin/python -m http.server 8765 -d site`.
 - Browser checks: `@playwright/test` in `node_modules`; run scripts from the repo root.
 

@@ -28,7 +28,8 @@ ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
 OUT = ROOT / "site" / "data"
 
-RMM_URL = "http://www.bom.gov.au/climate/mjo/graphics/rmm.74toRealtime.txt"
+# BoM moved the live file here; the old climate/mjo/graphics/ copy stopped at 2024-02-24.
+RMM_URL = "https://www.bom.gov.au/clim_data/IDCKGEM000/rmm.74toRealtime.txt"
 RMM_FILE = RAW / "rmm.74toRealtime.txt"
 RMM_START = "1979-01-01"  # the 1978 OLR gap ends here
 LPT_LIST = RAW / "mjo_lpt_list.txt"
@@ -42,9 +43,25 @@ EVENT_MIN_EAST_DEG = 90  # net counter-clockwise (eastward) progress needed, deg
 
 
 def fetch_rmm():
-    req = urllib.request.Request(RMM_URL, headers={"User-Agent": "mjo-track-app"})
+    """Download the latest RMM. Keeps the current file if the download is not newer,
+    so a stale or broken mirror can never roll the site back."""
+    req = urllib.request.Request(RMM_URL, headers={"User-Agent": "Mozilla/5.0 (mjo-track-app)"})
     with urllib.request.urlopen(req, timeout=60) as r:
-        RMM_FILE.write_bytes(r.read())
+        body = r.read()
+    tmp = RMM_FILE.with_suffix(".new")
+    tmp.write_bytes(body)
+    try:
+        new_end = load_rmm(tmp).dropna().index[-1]
+    except Exception as err:
+        tmp.unlink()
+        raise SystemExit(f"downloaded RMM is unreadable ({err}); keeping {RMM_FILE.name}")
+    old_end = load_rmm().dropna().index[-1] if RMM_FILE.exists() else None
+    if old_end is not None and new_end < old_end:
+        tmp.unlink()
+        print(f"downloaded RMM ends {new_end:%Y-%m-%d}, older than current {old_end:%Y-%m-%d}; keeping current")
+        return
+    tmp.replace(RMM_FILE)
+    print(f"RMM updated through {new_end:%Y-%m-%d}")
 
 
 def load_rmm(path=RMM_FILE):
