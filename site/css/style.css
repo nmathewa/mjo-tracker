@@ -243,10 +243,11 @@ body { counter-reset: fig; }
 .map-grid, .equator { stroke: var(--line); fill: none; vector-effect: non-scaling-stroke; }
 .equator { stroke-dasharray: 4 4; }
 .land { vector-effect: non-scaling-stroke; }
-.lpt-sys .seg { stroke: var(--lpt); stroke-width: 1.8; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.lpt-sys .seg { stroke: var(--lpt); stroke-width: 1.3; stroke-opacity: 0.4; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.lpt-sys .seg.mjo { stroke-width: 3; stroke-opacity: 1; }
 .lpt-casing { fill: none; stroke: transparent; stroke-width: 12; vector-effect: non-scaling-stroke; }
 .lpt-sys .lpt-start { vector-effect: non-scaling-stroke; }
-.is-playing .lpt-sys .seg { opacity: 0.18; }
+.is-playing .lpt-sys .seg { opacity: 0.25; }
 .is-playing .lpt-sys .seg.is-past { opacity: 1; }
 .lpt-now { fill: var(--lpt); fill-opacity: 0.25; stroke: var(--lpt); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
 .lpt-other { fill: none; stroke: var(--muted); stroke-opacity: 0.45; stroke-width: 1; vector-effect: non-scaling-stroke; }
@@ -327,3 +328,8 @@ body { counter-reset: fig; }
 .theme-btn { font-size: 0.8rem; padding: 4px 10px; white-space: nowrap; }
 .map-count { color: var(--muted); font-size: 0.8rem; margin-left: auto; }
 .map-count b { color: var(--ink); font-weight: 600; }
+.lpt-track.life { stroke-width: 1.2; stroke-opacity: 0.4; }
+.lpt-track.mjo { stroke-width: 3; stroke-opacity: 1; stroke-linecap: round; }
+.is-hl .lpt-track, .is-hl .seg { stroke: var(--hl) !important; }
+.swatch-mjo, .swatch-life { display: inline-block; width: 18px; height: 0; border-top: 3px solid var(--lpt); vertical-align: middle; margin-left: 4px; }
+.swatch-life { border-top-width: 1.3px; opacity: 0.5; }

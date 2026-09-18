@@ -42,7 +42,7 @@ export function drawMap(sel, data, state) {
   bar.append("span").attr("class", "map-count").html(
     `<b>${sys.length} MJO LPT system${sys.length === 1 ? "" : "s"}</b> in this window` +
     (groups < sys.length ? ` (${groups} LPT group${groups === 1 ? "" : "s"}; branches of one group are drawn separately)` : "") +
-    ` · only systems on the ${data.lptSrc.label} MJO list`);
+    ` · only systems on the ${data.lptSrc.label} MJO list · <span class="swatch-mjo"></span> MJO part <span class="swatch-life"></span> rest of life`);
 
   const W = Math.max(280, root.node().clientWidth || 1200);
   const Hbase = W * (2 * LAT) / 360;                       // whole 0–360° band at k = 1
@@ -80,7 +80,7 @@ export function drawMap(sel, data, state) {
     .on("click", (ev, s) => { showTip(ev, describe(s)); document.dispatchEvent(new CustomEvent("mjo:select", { detail: s.id })); });
   sysG.append("path").attr("class", "lpt-casing").attr("d", (s) => trackLine(s.track));
   sysG.selectAll("line").data((s) => s.track.slice(1).map((p, i) => [s.track[i], p]).filter(([a, b]) => Math.abs(a.lon - b.lon) < 180))
-    .join("line").attr("class", "seg")
+    .join("line").attr("class", ([a, b]) => (a.mjo && b.mjo ? "seg mjo" : "seg"))
     .attr("x1", ([a]) => xy(a)[0]).attr("y1", ([a]) => xy(a)[1]).attr("x2", ([, b]) => xy(b)[0]).attr("y2", ([, b]) => xy(b)[1]);
   const starts = sysG.append("circle").attr("class", "lpt-start")
     .attr("cx", (s) => xy(s.track[0])[0]).attr("cy", (s) => xy(s.track[0])[1]);
@@ -182,13 +182,14 @@ export function drawMap(sel, data, state) {
     slider.property("value", idx(t));
     label.text(+t >= +state.t1 ? "whole window · press ▶ to play" : fmtTime(t));
     // each system alive at t: its track so far (bold) and a disc of its rain area
+    // the whole-window view (slider at the end) shows tracks only
+    const playing = +t < +state.t1;
     const alive = [];
-    for (const s of sys) {
+    for (const s of playing ? sys : []) {
       if (t < s.t0 || t > s.t1) continue;
       const i = d3.bisector((p) => p.t).right(s.track, t) - 1;
       if (i >= 0) alive.push({ s, p: s.track[i], past: s.track.slice(0, i + 1) });
     }
-    const playing = +t < +state.t1;
     world.classed("is-playing", playing);
     if (playing) {
       sysG.selectAll("line.seg").classed("is-past", ([, b]) => b.t <= t);
@@ -203,7 +204,7 @@ export function drawMap(sel, data, state) {
     gOther.selectAll("path.lpt-other").classed("is-alive", (s) => t >= s.t0 && t <= s.t1);
     // RMM: shade the approximate longitude of the current phase when active
     const day = data.days[Math.floor((t - data.days[0].date) / DAY_MS)];
-    const on = day && day.amp !== null && day.amp >= 1;
+    const on = playing && day && day.amp !== null && day.amp >= 1;
     rmmBand.selectAll("*").remove();
     if (on) {
       const x = phaseLon(day.angle) * pxPerDeg, w = 30 * pxPerDeg;
@@ -232,7 +233,7 @@ export function drawMap(sel, data, state) {
     ui.stopBtn = bPlay;
   }
   root.append("p").attr("class", "caption").html("Centroid tracks of MJO rain systems from Large-scale Precipitation Tracking " +
-    `(Kerns &amp; Chen; ${data.lptSrc.label}, ${coverageText(data.lptSrc)}); open circles mark where each system began. ` +
+    `(Kerns &amp; Chen; ${data.lptSrc.label}, ${coverageText(data.lptSrc)}); open circles mark where each system began. Bold segments are the MJO part of each system's life (its eastward-propagation periods on the MJO list); thin segments are the rest. ` +
     "Pressing ▶ plays the window: discs show each system's rain area at that moment as a circle of equal area, not its real shape, " +
     "and the shaded band marks the <em>approximate</em> longitude of the current RMM phase when the MJO is active. " +
     "Drag to pan, scroll or +/− to zoom; click a track for that system's details.");

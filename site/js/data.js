@@ -49,7 +49,11 @@ export function loadLpt(id) {
       s.t0 = new Date(s.begin);
       s.t1 = new Date(s.end);
       for (const e of s.eprop) { e.t0 = new Date(e.begin); e.t1 = new Date(e.end); }
-      if (s.track) s.track = unpackTrack(s.track);
+      if (s.track) {
+        s.track = unpackTrack(s.track);
+        // the MJO part of the system's life: its eastward-propagation periods on the MJO list
+        for (const p of s.track) p.mjo = s.eprop.some((e) => p.t >= e.t0 && p.t <= e.t1);
+      }
     }
     return list;
   });

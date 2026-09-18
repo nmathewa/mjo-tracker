@@ -217,8 +217,13 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
   const tracked = sys.filter((s) => s.track);
   const gL = plot.append("g").attr("class", "lpt-only");
   const seam = d3.line().defined((p, i, a) => i === 0 || Math.abs(p.lon - a[i - 1].lon) < 180).x((p) => x(p.lon)).y((p) => y(p.t));
-  gL.selectAll("path").data(tracked).join("path").attr("class", "lpt-track mark tip-target")
-    .attr("data-id", (s) => s.id).attr("d", (s) => seam(s.track))
+  // whole life faint, the MJO (eastward-propagation) part bold
+  const mjoPart = d3.line().defined((p, i, a) => p.mjo && (i === 0 || (a[i - 1].mjo && Math.abs(p.lon - a[i - 1].lon) < 180)))
+    .x((p) => x(p.lon)).y((p) => y(p.t));
+  const gSys = gL.selectAll("g").data(tracked).join("g").attr("class", "mark tip-target").attr("data-id", (s) => s.id);
+  gSys.append("path").attr("class", "lpt-track life").attr("d", (s) => seam(s.track));
+  gSys.append("path").attr("class", "lpt-track mjo").attr("d", (s) => mjoPart(s.track));
+  gSys
     .on("mousemove", (ev, s) => showTip(ev, describe(s) + "<br><i>click for details</i>")).on("mouseleave", hideTip)
     .on("click", (ev, s) => { showTip(ev, describe(s)); document.dispatchEvent(new CustomEvent("mjo:select", { detail: s.id })); });
 
@@ -239,8 +244,10 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
   // only key what is drawn; with no LPT systems here, say where they are instead
   legend(sel, [
     ...(tracked.length ? [
-      { cls: "lpt-only", swatch: '<path class="lpt-track" d="M3 3c6 2 4 6 10 5s6 4 12 3"/>',
-        label: `LPT rain-band track <span class="dim">(centroid; click for details)</span>` },
+      { cls: "lpt-only", swatch: '<path class="lpt-track mjo" d="M3 3c6 2 4 6 10 5s6 4 12 3"/>',
+        label: `MJO part of an LPT track <span class="dim">(eastward propagation; click for details)</span>` },
+      { cls: "lpt-only", swatch: '<path class="lpt-track life" d="M3 3c6 2 4 6 10 5s6 4 12 3"/>',
+        label: `rest of the system's life` },
     ] : []),
     ...(rmmDays.length ? [
       { cls: "rmm-only", swatch: '<circle class="rmm-dot" cx="5" cy="7" r="2.5"/><circle class="rmm-dot" cx="13" cy="7" r="3.8"/><circle class="rmm-dot" cx="23" cy="7" r="5"/>',
