@@ -17,7 +17,8 @@ Website showing MJO tracks from several tracking methods, growing into live fore
 - `pipeline/outlines.py` — real rain-area outlines for IMERG MJO systems: reads 6-hourly slices of the
   per-system mask NetCDFs (50–350 MB each) over HTTP range requests (h5py+fsspec, ssl off — the server's
   TLS chain is incomplete), contours mask>0, simplifies, writes `site/data/outlines/imerg/<id>.json`.
-  Resumable; ~20 s/system.
+  Resumable; ~20 s/system. 285/320 done: the server's 2000060100_2005063023 mask folder stops at
+  lptid 56 (checked 2026-09-18), so 35 systems from 2003–05 have no outline and fall back to circles.
 - `data/raw/imerg_v7/` — IMERG V7 track files and MJO/non-MJO lists.
 - `data/raw/` — BoM `rmm.74toRealtime.txt`; LPT MJO list + all 20 `lpt_systems_tmpa_*.txt`
   track files (Jun 1998–Jun 2018) from the Kerns & Chen 2020 database,
