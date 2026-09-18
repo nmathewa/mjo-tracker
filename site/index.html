@@ -11,35 +11,37 @@
 <body>
   <header class="top">
     <div class="brand">
+      <p class="eyebrow">Madden–Julian Oscillation · 1979 to today</p>
       <h1>MJO Track Archive</h1>
       <p class="tag">The Madden–Julian Oscillation is a slow eastward pulse of tropical storms, 30–60 days round the globe. Pick a window to see how different tracking methods follow it.</p>
     </div>
-    <nav class="controls" aria-label="View controls">
-      <fieldset class="methods">
-        <legend>Methods</legend>
-        <label class="chip rmm"><input type="checkbox" name="method" value="rmm" checked> RMM index</label>
-        <label class="chip lpt"><input type="checkbox" name="method" value="lpt" checked> LPT tracking</label>
-      </fieldset>
-      <label class="presets">Jump to
-        <select id="preset">
-          <option value="">choose…</option>
-          <option value="latest">Latest 120 days</option>
-          <option value="2011-10-01">DYNAMO field campaign (Oct 2011)</option>
-          <option value="2015-11-01">2015–16 El Niño winter</option>
-          <option value="1987-12-15">TOGA COARE era (1987–88)</option>
-          <option value="2019-10-15">2019–20 Australian summer</option>
-        </select>
-      </label>
-      <div class="window-nav">
-        <button id="prev" type="button" aria-label="Previous window">◀</button>
-        <output id="window-label" aria-live="polite"></output>
-        <button id="next" type="button" aria-label="Next window">▶</button>
-      </div>
-    </nav>
   </header>
 
+  <nav class="controls" aria-label="View controls">
+    <div class="window-nav">
+      <button id="prev" type="button" aria-label="Previous window">◀</button>
+      <output id="window-label" aria-live="polite"></output>
+      <button id="next" type="button" aria-label="Next window">▶</button>
+    </div>
+    <label class="presets">Jump to
+      <select id="preset">
+        <option value="">choose…</option>
+        <option value="latest">Latest 120 days</option>
+        <option value="2011-10-01">DYNAMO field campaign (Oct 2011)</option>
+        <option value="2015-11-01">2015–16 El Niño winter</option>
+        <option value="1987-12-15">TOGA COARE era (1987–88)</option>
+        <option value="2019-10-15">2019–20 Australian summer</option>
+      </select>
+    </label>
+    <fieldset class="methods">
+      <legend>Methods</legend>
+      <label class="chip rmm"><input type="checkbox" name="method" value="rmm" checked><span class="glyph" aria-hidden="true"></span> RMM index</label>
+      <label class="chip lpt"><input type="checkbox" name="method" value="lpt" checked><span class="glyph" aria-hidden="true"></span> LPT tracking</label>
+    </fieldset>
+  </nav>
+
   <section class="card timeline-card" aria-labelledby="tl-h">
-    <h2 id="tl-h">Archive <span class="sub">RMM amplitude since 1979 · drag to choose a window</span></h2>
+    <h2 id="tl-h">Archive <span class="sub">drag or click to choose a window</span></h2>
     <div id="timeline" class="chart"></div>
   </section>
 
@@ -47,14 +49,14 @@
     <section class="card hov-card" aria-labelledby="hov-h">
       <h2 id="hov-h">Hovmöller <span class="sub">longitude vs. time · eastward = down and right</span></h2>
       <div id="hovmoller" class="chart"></div>
-      <p class="note">LPT: eastward-propagating segments of tracked rain systems (thin line: full centroid track, where available).
-        RMM: days with amplitude ≥ 1, placed at the <em>approximate</em> longitude of their phase.</p>
+      <p class="note">LPT follows tracked rain systems directly. RMM is an index, not a location: its days are placed at the
+        <em>approximate</em> longitude of their phase (Wheeler &amp; Hendon 2004 composites).</p>
     </section>
 
     <section class="card phase-card" aria-labelledby="ph-h">
       <h2 id="ph-h">RMM phase diagram</h2>
       <div id="phase" class="chart"></div>
-      <p class="note">Counter-clockwise = eastward. Inside the circle the MJO is weak.</p>
+      <p class="note">Counter-clockwise = eastward. Inside the circle (amplitude &lt; 1) the MJO is weak. Dots mark the 1st of each month.</p>
     </section>
 
     <section class="card map-card" aria-labelledby="map-h">

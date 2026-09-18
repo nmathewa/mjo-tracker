@@ -44,7 +44,14 @@ function writeHash() {
 
 function setWindow(a, b) {
   [state.t0, state.t1] = clampWindow(a, b);
-  render();
+  // charts are sized to their containers, so redraw when the width changes
+let lastW = innerWidth, resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; render(); } }, 150);
+});
+
+render();
 }
 
 function render() {
@@ -133,5 +140,12 @@ document.getElementById("about").innerHTML = `<dl>
     rain usually sits (Wheeler &amp; Hendon 2004 composites), so read the orange dots as approximate.</dd>
 </dl>`;
 document.getElementById("built").textContent = `Data built ${data.manifest.built}.`;
+
+// charts are sized to their containers, so redraw when the width changes
+let lastW = innerWidth, resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; render(); } }, 150);
+});
 
 render();
