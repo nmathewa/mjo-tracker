@@ -68,7 +68,7 @@ function render(push = false) {
   drawList("#events", data, state, pickEvent);
   fitHovmoller();
   renderDetail();
-  drawForecast("#forecast", data, state);
+  if (!document.getElementById("forecast-section").hidden) drawForecast("#forecast", data, state);
   const label = fmtRange(state.t0, addDays(state.t1, -1));
   document.getElementById("window-label").value = label;
   document.getElementById("timeline").setAttribute("aria-valuetext", label);
