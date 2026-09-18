@@ -37,10 +37,29 @@ export async function loadAll() {
     s.t0 = new Date(s.begin);
     s.t1 = new Date(s.end);
     for (const e of s.eprop) { e.t0 = new Date(e.begin); e.t1 = new Date(e.end); }
-    if (s.track) s.track = s.track.map(([t, lat, lon, area]) => ({ t: new Date(t), lat, lon, area }));
+    if (s.track) s.track = unpackTrack(s.track);
   }
   return { manifest, days, t0, rmmEvents, lpt, land };
 }
+
+// {t0, p: [[hours, lat, lon, area 1e3 km2], ...]} -> [{ t, lat, lon, area (km2) }]
+function unpackTrack({ t0, p }) {
+  const base = new Date(t0).getTime();
+  return p.map(([h, lat, lon, a]) => ({ t: new Date(base + h * 3600e3), lat, lon, area: a * 1e3 }));
+}
+
+// Non-MJO LPT systems, loaded only when the map asks for them.
+let othersP = null;
+export function loadOthers() {
+  othersP ??= fetch("data/lpt_other.json").then((r) => r.json()).then((list) => list.map((s) => ({
+    ...s, method: "lpt-other", t0: new Date(s.begin), t1: new Date(s.end), track: unpackTrack(s.track),
+  })));
+  return othersP;
+}
+
+// Higher-resolution coastlines for zoomed-in maps, loaded on first zoom.
+let land50P = null;
+export const loadLand50 = () => (land50P ??= fetch("vendor/land-50m.json").then((r) => r.json()));
 
 export const parseDay = (s) => new Date(`${s}T00:00Z`);
 export const addDays = (d, n) => new Date(d.getTime() + n * DAY);

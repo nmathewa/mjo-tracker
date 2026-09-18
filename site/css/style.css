@@ -94,14 +94,14 @@ button:hover, select:hover { border-color: var(--muted); }
 .grid {
   display: grid; gap: 14px;
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  grid-template-areas: "hov phase" "hov list" "map map";
+  grid-template-areas: "map map" "detail detail" "hov phase" "hov list";
 }
 .hov-card { grid-area: hov; }
 .phase-card { grid-area: phase; }
 .map-card { grid-area: map; }
 .list-card { grid-area: list; }
 @media (max-width: 860px) {
-  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hov" "phase" "list" "map"; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "detail" "hov" "phase" "list"; }
 }
 
 .chart > svg { display: block; width: 100%; height: auto; overflow: visible; margin-inline: auto; }
@@ -192,3 +192,65 @@ button:hover, select:hover { border-color: var(--muted); }
 .now-label { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .now .stale { display: block; color: var(--rmm); font-size: 0.85rem; margin-top: 2px; }
 .chip abbr { text-decoration: none; color: var(--muted); font-size: 0.78rem; font-weight: 600; }
+
+/* ---- interactive map */
+:root { --east: #d62728; --west: #1f77b4; --ocean: #eef3f7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --east: #f87171; --west: #60a5fa; --ocean: #111a23; } }
+:root[data-theme="dark"] { --east: #f87171; --west: #60a5fa; --ocean: #111a23; }
+.map-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 8px; font-size: 0.85rem; }
+.map-zoom { display: flex; gap: 4px; }
+.map-zoom button { min-width: 32px; height: 30px; padding: 0 8px; }
+.map-other { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.map-other .dim { color: var(--muted); }
+.map-svg { display: block; width: 100%; height: auto; cursor: grab; touch-action: none; border-radius: 6px; }
+.map-svg:active { cursor: grabbing; }
+.ocean { fill: var(--ocean); }
+.map-grid, .equator { stroke: var(--line); fill: none; vector-effect: non-scaling-stroke; }
+.equator { stroke-dasharray: 4 4; }
+.land { vector-effect: non-scaling-stroke; }
+.lpt-sys .seg { stroke: var(--lpt); stroke-width: 2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.lpt-casing { fill: none; stroke: transparent; stroke-width: 12; vector-effect: non-scaling-stroke; }
+.lpt-sys .lpt-start { vector-effect: non-scaling-stroke; }
+.is-playing .lpt-sys .seg { opacity: 0.18; }
+.is-playing .lpt-sys .seg.is-past { opacity: 1; }
+.lpt-now { fill: var(--lpt); fill-opacity: 0.28; stroke: var(--lpt); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.lpt-other { fill: none; stroke: var(--muted); stroke-opacity: 0.45; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.is-playing .lpt-other { stroke-opacity: 0.12; }
+.is-playing .lpt-other.is-alive { stroke-opacity: 0.8; }
+.rmm-band rect { fill: var(--rmm); fill-opacity: 0.1; }
+.rmm-band text { fill: var(--rmm); }
+.map-axis text { font-size: 10.5px; fill: var(--muted); }
+.map-time { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+.map-time .play { width: 34px; height: 30px; padding: 0; }
+.map-time input[type=range] { flex: 1; min-width: 0; accent-color: var(--lpt); }
+.map-now { font-variant-numeric: tabular-nums; font-size: 0.85rem; min-width: 16ch; color: var(--muted); }
+.time-cursor { stroke: var(--hl); stroke-width: 1.5; stroke-dasharray: 5 3; pointer-events: none; }
+.time-cursor-dot { fill: none; stroke: var(--hl); stroke-width: 2.5; pointer-events: none; }
+
+/* ---- system detail */
+.detail-card { grid-area: detail; border-color: var(--lpt); }
+.detail-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.detail-btns { display: flex; gap: 6px; }
+.detail-btns .close { width: 32px; font-size: 1.1rem; line-height: 1; }
+.detail-grid {
+  display: grid; gap: 14px 18px; margin-top: 10px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-areas: "map lon" "map spd" "hov prop" "hov .";
+}
+.detail-grid .p-map { grid-area: map; } .detail-grid .p-hov { grid-area: hov; }
+.detail-grid .p-lon { grid-area: lon; } .detail-grid .p-spd { grid-area: spd; } .detail-grid .p-prop { grid-area: prop; }
+@media (max-width: 860px) { .detail-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "lon" "spd" "prop" "hov"; } }
+.panel h3 { font-size: 0.85rem; margin: 0 0 4px; font-weight: 600; }
+.panel svg { display: block; width: 100%; height: auto; }
+.panel text { fill: var(--muted); font-size: 11px; }
+.foot { fill: none; stroke-width: 1; stroke-opacity: 0.75; }
+.foot-hov { stroke-opacity: 0.6; }
+.det-track { fill: none; stroke: var(--ink); stroke-width: 2; }
+.det-seg { stroke-width: 2.5; stroke-linecap: round; }
+.det-seg.east { stroke: var(--east); } .det-seg.west { stroke: var(--west); }
+.spd.east { fill: var(--east); } .spd.west { fill: var(--west); }
+.zero { stroke: var(--ink); }
+.eprop-band { fill: var(--east); fill-opacity: 0.08; }
+.eprop-band.strong { fill-opacity: 0.55; }
+.hover-rule { stroke: var(--muted); stroke-dasharray: 3 3; pointer-events: none; }
+.lpt-track { cursor: pointer; }

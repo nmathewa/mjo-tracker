@@ -47,6 +47,12 @@
   </section>
 
   <main class="grid">
+    <section class="card map-card" aria-labelledby="map-h">
+      <h2 id="map-h">Map <span class="sub">MJO rain systems (LPT) · pan, zoom, play</span></h2>
+      <div id="map" class="chart"></div>
+    </section>
+    <section id="detail" class="card detail-card" aria-label="Selected system details" hidden></section>
+
     <section class="card hov-card" aria-labelledby="hov-h">
       <h2 id="hov-h">Hovmöller <span class="sub">longitude vs. time · eastward = down and right</span></h2>
       <div id="hovmoller" class="chart"></div>
@@ -60,10 +66,6 @@
       <p class="note">Counter-clockwise = eastward. Inside the circle (amplitude &lt; 1) the MJO is weak. Dots mark the 1st of each month.</p>
     </section>
 
-    <section class="card map-card" aria-labelledby="map-h">
-      <h2 id="map-h">Map <span class="sub">LPT centroid tracks</span></h2>
-      <div id="map" class="chart"></div>
-    </section>
 
     <section class="card list-card" aria-labelledby="list-h">
       <h2 id="list-h">Events in window</h2>

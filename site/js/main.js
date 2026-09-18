@@ -2,7 +2,9 @@
 // The hash (#from=2011-10-01&days=120&m=rmm,lpt) makes every view a shareable link.
 import { loadAll, parseDay, addDays, DAY_MS, fmtRange, hashFor } from "./data.js";
 import { nowSentence } from "./now.js";
-import { drawTimeline, drawHovmoller, drawPhase, drawMap, drawList, hideTip } from "./charts.js";
+import { drawTimeline, drawHovmoller, drawPhase, drawList, hideTip } from "./charts.js";
+import { drawMap } from "./map.js";
+import { drawDetail } from "./detail.js";
 
 const MIN_DAYS = 30, MAX_DAYS = 365, DEFAULT_DAYS = 120;
 const data = await loadAll().catch((err) => {
@@ -40,7 +42,7 @@ function readHash() {
 // collapses into one entry.
 let lastBurst = 0;
 function writeHash(push) {
-  const h = hashFor(state.t0, Math.round((state.t1 - state.t0) / DAY_MS), state.methods);
+  const h = hashFor(state.t0, Math.round((state.t1 - state.t0) / DAY_MS), state.methods) + (selected ? `&sel=${selected}` : "");
   if (h === location.hash) return;
   const now = Date.now(), coalesce = push === "burst" && now - lastBurst < 800;
   lastBurst = push === "burst" ? now : 0;
@@ -62,6 +64,7 @@ function render(push = false) {
   drawMap("#map", data, state);
   drawList("#events", data, state, pickEvent);
   fitHovmoller();
+  renderDetail();
   const label = fmtRange(state.t0, addDays(state.t1, -1));
   document.getElementById("window-label").value = label;
   document.getElementById("timeline").setAttribute("aria-valuetext", label);
@@ -81,6 +84,23 @@ function fitHovmoller() {
   if (extra > 4) drawHovmoller("#hovmoller", data, state, extra);
 }
 
+// the selected LPT system (details panel); part of the URL as &sel=
+let selected = new URLSearchParams(location.hash.slice(1)).get("sel");
+const byId = new Map(data.lpt.map((s) => [s.id, s]));
+function renderDetail() {
+  drawDetail("#detail", data, byId.get(selected), {
+    onClose: () => select(null),
+    onShow: () => { const s = byId.get(selected); if (s) pickEvent(s); },
+  });
+}
+function select(id, scroll = true) {
+  selected = byId.has(id) ? id : null;
+  writeHash(false);
+  renderDetail();
+  if (selected && scroll) document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+document.addEventListener("mjo:select", (ev) => select(ev.detail));
+
 function pickEvent(ev) {
   const len = Math.max(MIN_DAYS, Math.round((ev.t1 - ev.t0) / DAY_MS) + 20);
   const t0 = addDays(ev.t0, -10);
@@ -88,6 +108,7 @@ function pickEvent(ev) {
   highlight(ev.id);
   // the list was redrawn; keep keyboard focus on the row that was picked
   document.querySelector(`#events li[data-id="${ev.id}"]`)?.focus({ preventScroll: true });
+  if (ev.method === "lpt" && selected !== ev.id) select(ev.id, false);
 }
 
 function applyMethods() {
@@ -167,7 +188,10 @@ tl.addEventListener("keydown", (ev) => {
 // Back/Forward and pasted or clicked links (#from=…) land here
 window.addEventListener("hashchange", () => {
   const s = readHash();
-  if (s) { state.methods = s.methods; setWindow(s.t0, s.t1, false); }
+  if (s) {
+    selected = new URLSearchParams(location.hash.slice(1)).get("sel");
+    state.methods = s.methods; setWindow(s.t0, s.t1, false);
+  }
 });
 
 // about
@@ -178,8 +202,10 @@ document.getElementById("about").innerHTML = `<dl>
     ${rmmM.note} An <em>event</em> here is a spell with amplitude ≥ ${r.min_amp} (dips ≤ ${r.gap_days} days allowed)
     lasting at least ${r.min_days} days and moving at least ${r.min_east_deg}° eastward around the phase diagram
     (${rmmM.n_events} events).</dd>
-  <dt>LPT</dt><dd>${lptM.long_name}: rain systems tracked in ${lptM.source}. ${lptM.n_systems} MJO systems, ${lptM.coverage.join(" to ")};
-    full centroid tracks loaded for ${lptM.n_full_tracks} of them (Jun 2011 – Jun 2012).</dd>
+  <dt>LPT</dt><dd>${lptM.long_name}: rain systems tracked in ${lptM.source}, ${lptM.coverage.join(" to ")}.
+    ${lptM.n_systems} MJO systems with full centroid tracks, plus ${lptM.n_other} other (non-MJO) systems lasting ≥ 3 days,
+    shown on the map when switched on. Data: <a href="${lptM.source_url}">LPT data access (Kerns, Univ. of Washington)</a>.
+    Rain areas are drawn as circles of equal area, not the systems' real shapes.</dd>
   <dt>Hovmöller</dt><dd>RMM is an index, not a location. Its days are placed at the longitude where each phase's
     rain usually sits (Wheeler &amp; Hendon 2004 composites), so read the orange dots as approximate.</dd>
 </dl>`;

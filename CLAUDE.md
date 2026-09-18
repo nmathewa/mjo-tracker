@@ -12,11 +12,16 @@ Website showing MJO tracks from several tracking methods, growing into live fore
   reduced to one of two shapes: a daily RMM-space index, or tracked systems in lon/lat/time
   (with `eprop` eastward-propagation segments and an optional full `track`). Adding a method
   = a loader here + a manifest entry + a colour token.
-- `data/raw/` — BoM `rmm.74toRealtime.txt`, LPT MJO list (1998–2018, from
-  `~/phd/EXP_1d_diurnal_mse_TWP/dsets/`), LPT full tracks (only Jun 2011–Jun 2012 so far).
+- `data/raw/` — BoM `rmm.74toRealtime.txt`; LPT MJO list + all 20 `lpt_systems_tmpa_*.txt`
+  track files (Jun 1998–Jun 2018) from the Kerns & Chen 2020 database,
+  https://orca.atmos.washington.edu/data/lpt/ (kc2020/20_72h/thresh12/systems/). Track files number
+  systems per June–June season, so tracks are keyed by (season year, lpt_index). The same site has
+  IMERG V7 (1998–present) and ERA5 (1940–) LPT databases — candidates for extending coverage.
 - `site/` — static, no build step: `index.html`, `css/style.css`, `js/data.js` (load + phase
   geometry), `js/charts.js` (timeline, Hovmöller, phase diagram, map, list), `js/main.js`
-  (state in URL hash `#from=&days=&m=`), `js/now.js` (plain-language "latest" line, RMM only). D3/topojson/land vendored in `site/vendor/`.
+  (state in URL hash `#from=&days=&m=&sel=`), `js/now.js` (plain-language "latest" line, RMM only),
+  `js/map.js` (interactive pan/zoom/playback map; broadcasts `mjo:time`, `mjo:select` events),
+  `js/detail.js` (one LPT system, after Kerns & Chen 2020 Fig. 1; opens only on click). D3/topojson/land vendored in `site/vendor/`.
 
 ## Commands
 - Build data: `~/miniforge3/envs/nma/bin/python pipeline/build.py` (`--fetch` pulls latest RMM from
@@ -36,4 +41,5 @@ Website showing MJO tracks from several tracking methods, growing into live fore
   composites) — always labelled as such.
 - A system can have several `eprop` segments; the LPT list has one row per segment.
 - RMM ENSO removal stops after 2013-12-31 (BoM).
-- Don't imply LPT full tracks exist outside the loaded files.
+- Rain areas are drawn as circles of equal area, not real shapes (real masks exist upstream).
+- LPT tracks cover Jun 1998–Jun 2018 only (TMPA); say so wherever LPT appears.

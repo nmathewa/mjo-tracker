@@ -53,11 +53,28 @@ function legend(sel, items) {
   return div;
 }
 
+// time cursors on the Hovmöller and phase diagram, driven by the map slider ("mjo:time")
+const cursor = { hov: null, phase: null };
+document.addEventListener("mjo:time", (ev) => {
+  const t = ev.detail;
+  if (cursor.hov?.line.node().isConnected) {
+    const on = +t < +cursor.hov.state.t1;
+    cursor.hov.line.style("display", on ? null : "none").attr("y1", cursor.hov.y(t)).attr("y2", cursor.hov.y(t));
+  }
+  if (cursor.phase?.dot.node().isConnected) {
+    const { pts, s, sy, dot, state } = cursor.phase;
+    const d = pts.find((p) => +p.date === +d3.utcDay.floor(t));
+    const on = d && +t < +state.t1;
+    dot.style("display", on ? null : "none");
+    if (on) dot.attr("cx", s(d.rmm1)).attr("cy", sy(d.rmm2));
+  }
+});
+
 const isDark = () => getComputedStyle(document.documentElement).colorScheme.includes("dark");
 
 function inWindow(a0, a1, s) { return a1 > s.t0 && a0 < s.t1; }
 
-// A window where LPT full tracks exist, for "see …" links from panels that are empty here.
+// A window with LPT tracks, for "see …" links from panels that are empty here.
 const lptLink = (state) =>
   `<a href="${hashFor(parseDay("2011-10-01"), 120, new Set([...state.methods, "lpt"]))}">see DYNAMO 2011 →</a>`;
 
@@ -187,13 +204,18 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
     .on("mousemove click", (ev, d) => showTip(ev, `<b>${fmtDay(d.date)}</b><br>RMM phase ${d.phase} (${PHASE_REGION[d.phase]})<br>amplitude ${d.amp.toFixed(2)}`))
     .on("mouseleave", hideTip);
 
-  // LPT: full centroid tracks, where loaded
+  // LPT: centroid tracks (broken where they cross the 0°/360° seam); click opens details
   const sys = data.lpt.filter((s) => inWindow(s.t0, s.t1, state));
   const tracked = sys.filter((s) => s.track);
   const gL = plot.append("g").attr("class", "lpt-only");
+  const seam = d3.line().defined((p, i, a) => i === 0 || Math.abs(p.lon - a[i - 1].lon) < 180).x((p) => x(p.lon)).y((p) => y(p.t));
   gL.selectAll("path").data(tracked).join("path").attr("class", "lpt-track mark tip-target")
-    .attr("data-id", (s) => s.id).attr("d", (s) => d3.line().x((p) => x(p.lon)).y((p) => y(p.t))(s.track))
-    .on("mousemove click", (ev, s) => showTip(ev, describe(s))).on("mouseleave", hideTip);
+    .attr("data-id", (s) => s.id).attr("d", (s) => seam(s.track))
+    .on("mousemove", (ev, s) => showTip(ev, describe(s) + "<br><i>click for details</i>")).on("mouseleave", hideTip)
+    .on("click", (ev, s) => { showTip(ev, describe(s)); document.dispatchEvent(new CustomEvent("mjo:select", { detail: s.id })); });
+
+  // time cursor, moved by the map's time slider
+  cursor.hov = { y, line: svg.append("line").attr("class", "time-cursor").attr("x1", m.l).attr("x2", W - m.r).style("display", "none"), state };
 
   // speed guide: 5 m/s from the top-left of the Indian Ocean
   const lon0 = 60, t0 = addDays(state.t0, 2), sp = 5 * 86400 / 111e3; // deg/day
@@ -210,9 +232,7 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
   legend(sel, [
     ...(tracked.length ? [
       { cls: "lpt-only", swatch: '<path class="lpt-track" d="M3 3c6 2 4 6 10 5s6 4 12 3"/>',
-        label: `LPT rain-band track <span class="dim">(loaded for Jun 2011 – Jun 2012 only)</span>` },
-    ] : sys.length ? [
-      { cls: "lpt-only", label: `<span class="dim">${sys.length} LPT system${sys.length > 1 ? "s" : ""} in this window (see Events); tracks are loaded for Jun 2011 – Jun 2012 only</span>` },
+        label: `LPT rain-band track <span class="dim">(centroid; click for details)</span>` },
     ] : []),
     ...(rmmDays.length ? [
       { cls: "rmm-only", swatch: '<circle class="rmm-dot" cx="5" cy="7" r="2.5"/><circle class="rmm-dot" cx="13" cy="7" r="3.8"/><circle class="rmm-dot" cx="23" cy="7" r="5"/>',
@@ -220,7 +240,7 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
     ] : []),
     { swatch: '<line class="guide" x1="3" y1="3" x2="25" y2="11"/>', label: "5 m/s eastward reference" },
     ...(sys.length ? [] : [
-      { cls: "lpt-only", label: `<span class="dim">No LPT systems here · LPT covers 1998–2018 ·</span> ${lptLink(state)}` },
+      { cls: "lpt-only", label: `<span class="dim">No LPT systems here · LPT tracks cover Jun 1998 – Jun 2018 ·</span> ${lptLink(state)}` },
     ]),
   ]);
 }
@@ -282,6 +302,7 @@ export function drawPhase(sel, data, state) {
     .attr("stroke", col(0));
   g.append("circle").attr("class", "traj-end").attr("r", 5).attr("cx", s(pts.at(-1).rmm1)).attr("cy", sy(pts.at(-1).rmm2))
     .attr("fill", col(pts.length - 1));
+  cursor.phase = { pts, s, sy, state, dot: svg.append("circle").attr("class", "time-cursor-dot").attr("r", 6).style("display", "none") };
 
   const stops = d3.range(0, 1.01, 0.25).map((t) => `<stop offset="${t}" stop-color="${vir(t)}"/>`).join("");
   const key = d3.select(sel).append("div").attr("class", "legend time-key rmm-only");
@@ -293,59 +314,6 @@ export function drawPhase(sel, data, state) {
   key.append("span").attr("class", "key").html(
     `<span>end <b>${fmtDay(pts.at(-1).date)}</b></span>` +
     `<svg class="sw" viewBox="0 0 14 14" aria-hidden="true"><circle class="traj-end" cx="7" cy="7" r="4.5" fill="${vir(1)}"/></svg>`);
-}
-
-// ---------------------------------------------------------------- map
-export function drawMap(sel, data, state) {
-  const root = d3.select(sel), card = root.node().closest(".card");
-  const sub = card.querySelector("h2 .sub");
-  const sys = data.lpt.filter((s) => s.track && inWindow(s.t0, s.t1, state));
-  // Nothing to draw: collapse to one line that says why and where to look instead,
-  // rather than an empty world map.
-  const off = !state.methods.has("lpt");
-  card.classList.toggle("is-empty", off || !sys.length);
-  if (off || !sys.length) {
-    root.selectAll("*").remove();
-    sub.textContent = "LPT centroid tracks";
-    const nIn = data.lpt.filter((s) => inWindow(s.t0, s.t1, state)).length;
-    const msg = off ? "LPT tracking is switched off."
-      : nIn ? `${nIn} LPT system${nIn > 1 ? "s" : ""} here (see the Hovmöller), but full tracks are loaded for Jun 2011 – Jun 2012 only · ${lptLink(state)}`
-        : `No LPT systems in this window · LPT covers 1998–2018, full tracks Jun 2011 – Jun 2012 · ${lptLink(state)}`;
-    root.append("p").attr("class", "empty-line").html(msg);
-    return;
-  }
-
-  // On a phone the whole 0–360° strip is only ~60px tall, so zoom to the tracks
-  // (at least 120° of longitude); wider screens keep the full tropical belt.
-  const LAT = 35, W = widthOf(sel, 1200);
-  let lon0 = 0, span = 360;
-  if (W < 600) {
-    const lons = sys.flatMap((s) => s.track.map((p) => p.lon));
-    let a = Math.floor((d3.min(lons) - 10) / 10) * 10, b = Math.ceil((d3.max(lons) + 10) / 10) * 10;
-    if (b - a < 120) { const c = (a + b) / 2; a = c - 60; b = c + 60; }
-    lon0 = a; span = Math.min(360, b - a);
-  }
-  const H = Math.round(W * 2 * LAT / span);
-  const fmtLon = (l) => { l = ((l % 360) + 360) % 360; return l === 0 || l === 180 ? `${l}°` : l < 180 ? `${l}°E` : `${360 - l}°W`; };
-  sub.textContent = span < 360 ? `LPT centroid tracks · zoomed to ${fmtLon(lon0)}–${fmtLon(lon0 + span)}` : "LPT centroid tracks";
-  const svg = svgIn(sel, W, H);
-  // equirectangular, lon0 … lon0+span across the width, ±LAT tall
-  const proj = d3.geoEquirectangular().rotate([-(lon0 + span / 2), 0]).scale(W / (span * Math.PI / 180)).translate([W / 2, H / 2]);
-  const path = d3.geoPath(proj);
-  const land = topojson.feature(data.land, data.land.objects.land);
-  svg.append("clipPath").attr("id", "map-clip").append("rect").attr("width", W).attr("height", H);
-  const g0 = svg.append("g").attr("clip-path", "url(#map-clip)");
-  g0.append("path").attr("class", "gridline").attr("fill", "none").attr("d", path(d3.geoGraticule().step([30, 10])()));
-  g0.append("path").attr("class", "land").attr("d", path(land));
-  svg.append("rect").attr("class", "frame").attr("width", W).attr("height", H);
-
-  const g = g0.append("g").attr("class", "lpt-only");
-  const pxy = (p) => proj([p.lon, p.lat]);
-  g.selectAll("path").data(sys).join("path").attr("class", "lpt-map mark tip-target").attr("data-id", (s) => s.id)
-    .attr("d", (s) => d3.line().x((p) => pxy(p)[0]).y((p) => pxy(p)[1]).curve(d3.curveCatmullRom)(s.track))
-    .on("mousemove click", (ev, s) => showTip(ev, describe(s))).on("mouseleave", hideTip);
-  g.selectAll("circle").data(sys).join("circle").attr("class", "lpt-start").attr("r", 4)
-    .attr("cx", (s) => pxy(s.track[0])[0]).attr("cy", (s) => pxy(s.track[0])[1]);
 }
 
 // ---------------------------------------------------------------- list
@@ -368,5 +336,5 @@ export function drawList(sel, data, state, onPick) {
   li.append("span").attr("class", "when").text((d) => fmtRange(d.t0, d.method === "rmm" ? addDays(d.t1, -1) : d.t1));
   li.append("span").attr("class", "meta").text((d) => d.method === "rmm"
     ? `${d.days} d · phase ${d.start_phase}→${d.end_phase} · max amp ${d.max_amp}`
-    : `${Math.round(d.duration_days)} d · ${d.eprop.map((e) => `${Math.round(e.lon_begin)}°→${Math.round(e.lon_end)}°E`).join(", ")}${d.track ? " · track" : ""}`);
+    : `${Math.round(d.duration_days)} d · ${d.eprop.map((e) => `${Math.round(e.lon_begin)}°→${Math.round(e.lon_end)}°E`).join(", ")}`);
 }
