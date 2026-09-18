@@ -123,7 +123,7 @@ function select(id, scroll = true) {
 document.addEventListener("mjo:select", (ev) => {
   selectForecastSystem(ev.detail);
   select(ev.detail);
-  drawForecast("#forecast", data, state);
+  if (!document.getElementById("forecast-section").hidden) drawForecast("#forecast", data, state);
 });
 
 function pickEvent(ev) {
