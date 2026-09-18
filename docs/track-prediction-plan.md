@@ -89,6 +89,17 @@ Analogs are likely the strongest classical baseline with 320 events — beat the
   irregularly (last: 18 Aug 2026), so live use requires running LPT ourselves on near-real-time
   IMERG — shared work with Phase 2. Until then: "experimental" label, hindcasts only.
 
+## Where things run
+
+| step | where | notes |
+|---|---|---|
+| training, cross-validation, hindcasts | this machine (RTX 4050) | hindcasts committed as JSON |
+| daily RMM update + deploy | GitHub Actions | running since 2026-09-18 |
+| model inference | GitHub Actions (CPU) | export to ONNX (< 1 MB, committed); run with `onnxruntime`, no torch in CI. ~seconds per day. Same file can run in the browser via `onnxruntime-web`. |
+| near-real-time LPT tracking | GitHub Actions — **untested** | IMERG NRT via NASA Earthdata (secret), public LPT code, tracking state kept between runs. Must be proven with a trial workflow (runtime, download size, continuity) before live forecasts depend on it. Shared with Phase 2. |
+
+GitHub-hosted runners (public repos): 4 vCPU, 16 GB RAM, 14 GB disk, 6 h per job, no GPU.
+
 ## Code layout (proposed)
 
 ```
