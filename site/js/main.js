@@ -1,7 +1,7 @@
 // Page state, URL hash, and wiring between the views.
 // The hash (#from=2011-10-01&days=120&m=rmm,lpt) makes every view a shareable link.
-import { loadAll, parseDay, addDays, DAY_MS, fmtRange } from "./data.js";
-import { drawTimeline, drawHovmoller, drawPhase, drawMap, drawList } from "./charts.js";
+import { loadAll, parseDay, addDays, DAY_MS, fmtRange, hashFor } from "./data.js";
+import { drawTimeline, drawHovmoller, drawPhase, drawMap, drawList, hideTip } from "./charts.js";
 
 const MIN_DAYS = 30, MAX_DAYS = 365, DEFAULT_DAYS = 120;
 const data = await loadAll().catch((err) => {
@@ -29,40 +29,55 @@ function readHash() {
   const t0 = parseDay(p.get("from"));
   if (isNaN(t0)) return null;
   const days = +p.get("days") || DEFAULT_DAYS;
-  const m = p.get("m");
-  return { t0, t1: addDays(t0, days), methods: new Set(m ? m.split(",") : ["rmm", "lpt"]) };
+  // "m=" (both methods off) is a valid state; only a missing m means the default
+  const m = p.has("m") ? p.get("m").split(",").filter((k) => k === "rmm" || k === "lpt") : ["rmm", "lpt"];
+  return { t0, t1: addDays(t0, days), methods: new Set(m) };
 }
 
-function writeHash() {
-  const p = new URLSearchParams({
-    from: d3.utcFormat("%Y-%m-%d")(state.t0),
-    days: Math.round((state.t1 - state.t0) / DAY_MS),
-    m: [...state.methods].join(","),
-  });
-  history.replaceState(null, "", `#${p}`);
+// Window changes push a history entry so Back returns to the previous window.
+// push = true | "burst" | false; a quick run of "burst" steps (holding an arrow key)
+// collapses into one entry.
+let lastBurst = 0;
+function writeHash(push) {
+  const h = hashFor(state.t0, Math.round((state.t1 - state.t0) / DAY_MS), state.methods);
+  if (h === location.hash) return;
+  const now = Date.now(), coalesce = push === "burst" && now - lastBurst < 800;
+  lastBurst = push === "burst" ? now : 0;
+  if (push && !coalesce) history.pushState(null, "", h);
+  else history.replaceState(null, "", h);
 }
 
-function setWindow(a, b) {
+function setWindow(a, b, push = true) {
   [state.t0, state.t1] = clampWindow(a, b);
-  // charts are sized to their containers, so redraw when the width changes
-let lastW = innerWidth, resizeTimer;
-window.addEventListener("resize", () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; render(); } }, 150);
-});
-
-render();
+  render(push);
 }
 
-function render() {
-  writeHash();
+function render(push = false) {
+  writeHash(push);
+  hideTip();
   drawTimeline("#timeline", data, state, setWindow);
   drawHovmoller("#hovmoller", data, state);
   drawPhase("#phase", data, state);
   drawMap("#map", data, state);
   drawList("#events", data, state, pickEvent);
-  document.getElementById("window-label").value = fmtRange(state.t0, addDays(state.t1, -1));
+  fitHovmoller();
+  const label = fmtRange(state.t0, addDays(state.t1, -1));
+  document.getElementById("window-label").value = label;
+  document.getElementById("timeline").setAttribute("aria-valuetext", label);
   applyMethods();
+}
+
+// Two-column layout: grow the Hovmöller so its card ends level with the phase + list
+// column instead of leaving a blank block under its legend.
+function fitHovmoller() {
+  const hov = document.querySelector(".hov-card");
+  if (getComputedStyle(document.querySelector(".grid")).gridTemplateColumns.split(" ").length < 2) return;
+  const phase = document.querySelector(".phase-card").getBoundingClientRect();
+  const list = document.querySelector(".list-card"), ul = list.querySelector("ul");
+  const listH = ul.getBoundingClientRect().bottom - list.getBoundingClientRect().top + parseFloat(getComputedStyle(list).paddingBottom) + 1;
+  const gap = parseFloat(getComputedStyle(document.querySelector(".grid")).rowGap);
+  const extra = Math.floor(phase.height + gap + listH - hov.getBoundingClientRect().height);
+  if (extra > 4) drawHovmoller("#hovmoller", data, state, extra);
 }
 
 function pickEvent(ev) {
@@ -70,6 +85,8 @@ function pickEvent(ev) {
   const t0 = addDays(ev.t0, -10);
   setWindow(t0, addDays(t0, len));
   highlight(ev.id);
+  // the list was redrawn; keep keyboard focus on the row that was picked
+  document.querySelector(`#events li[data-id="${ev.id}"]`)?.focus({ preventScroll: true });
 }
 
 function applyMethods() {
@@ -95,13 +112,17 @@ document.addEventListener("focusin", (ev) => {
   const el = ev.target.closest(".mark[data-id]");
   if (el) highlight(el.dataset.id);
 });
+// touch: a tap on a mark shows its tooltip (charts.js); a tap anywhere else clears it,
+// and a scroll hides it so it never floats over the wrong chart
+document.addEventListener("click", (ev) => {
+  if (!ev.target.closest(".tip-target")) { hideTip(); if (!ev.target.closest(".mark")) highlight(null); }
+});
+addEventListener("scroll", hideTip, { passive: true });
 
 // controls
 document.querySelectorAll('input[name="method"]').forEach((el) => el.addEventListener("change", () => {
   el.checked ? state.methods.add(el.value) : state.methods.delete(el.value);
-  drawList("#events", data, state, pickEvent);
-  applyMethods();
-  writeHash();
+  render();
 }));
 document.getElementById("preset").addEventListener("change", (ev) => {
   const v = ev.target.value;
@@ -112,18 +133,40 @@ document.getElementById("preset").addEventListener("change", (ev) => {
 });
 const step = (dir) => {
   const len = state.t1 - state.t0;
-  setWindow(new Date(+state.t0 + dir * len / 2), new Date(+state.t1 + dir * len / 2));
+  setWindow(new Date(+state.t0 + dir * len / 2), new Date(+state.t1 + dir * len / 2), "burst");
 };
 document.getElementById("prev").addEventListener("click", () => step(-1));
 document.getElementById("next").addEventListener("click", () => step(1));
 document.addEventListener("keydown", (ev) => {
+  if (ev.altKey || ev.ctrlKey || ev.metaKey) return; // leave Alt+← (browser Back) alone
   if (ev.target.closest("input, select, textarea")) return;
-  if (ev.key === "ArrowLeft") step(-1);
-  if (ev.key === "ArrowRight") step(1);
+  if (ev.key === "ArrowLeft") { ev.preventDefault(); step(-1); }
+  if (ev.key === "ArrowRight") { ev.preventDefault(); step(1); }
 });
+// the archive strip is a keyboard control too: ←/→ step, PgUp/PgDn a full window,
+// Home/End first/latest, +/− narrower/wider window
+const tl = document.getElementById("timeline");
+tl.setAttribute("tabindex", "0");
+tl.setAttribute("role", "slider");
+tl.setAttribute("aria-label", "Archive window. Arrow keys move it, plus and minus change its length, Home and End jump to the start or latest data");
+tl.addEventListener("keydown", (ev) => {
+  if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+  const len = state.t1 - state.t0, mid = (+state.t0 + +state.t1) / 2;
+  const act = {
+    PageUp: () => setWindow(new Date(state.t0 - len), state.t0),
+    PageDown: () => setWindow(state.t1, new Date(+state.t1 + len)),
+    Home: () => setWindow(first, new Date(+first + len)),
+    End: () => setWindow(new Date(last - len), last),
+    "+": () => setWindow(new Date(mid - len / 4), new Date(mid + len / 4)),
+    "=": () => setWindow(new Date(mid - len / 4), new Date(mid + len / 4)),
+    "-": () => setWindow(new Date(mid - len), new Date(mid + len)),
+  }[ev.key];
+  if (act) { ev.preventDefault(); act(); }
+});
+// Back/Forward and pasted or clicked links (#from=…) land here
 window.addEventListener("hashchange", () => {
   const s = readHash();
-  if (s) { Object.assign(state, s); setWindow(s.t0, s.t1); }
+  if (s) { state.methods = s.methods; setWindow(s.t0, s.t1, false); }
 });
 
 // about

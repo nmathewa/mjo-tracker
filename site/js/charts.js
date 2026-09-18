@@ -1,7 +1,7 @@
 // The five views. Each draw function clears its container and redraws from
 // (data, state); state = { t0, t1, methods: Set }. Marks carry data-id so
 // hovering one highlights the same event everywhere (see main.js).
-import { addDays, DAY_MS, fmtDay, fmtRange, phaseLon, PHASE_REGION, REGIONS } from "./data.js";
+import { addDays, DAY_MS, fmtDay, fmtRange, phaseLon, PHASE_REGION, REGIONS, hashFor, parseDay } from "./data.js";
 
 const tip = document.getElementById("tip");
 export function showTip(ev, html) {
@@ -56,6 +56,10 @@ function legend(sel, items) {
 const isDark = () => getComputedStyle(document.documentElement).colorScheme.includes("dark");
 
 function inWindow(a0, a1, s) { return a1 > s.t0 && a0 < s.t1; }
+
+// A window where LPT full tracks exist, for "see …" links from panels that are empty here.
+const lptLink = (state) =>
+  `<a href="${hashFor(parseDay("2011-10-01"), 120, new Set([...state.methods, "lpt"]))}">see DYNAMO 2011 →</a>`;
 
 function describe(item) {
   if (item.method === "rmm") {
@@ -117,7 +121,8 @@ export function drawTimeline(sel, data, state, onBrush) {
       if (!ev.sourceEvent) return;
       if (!ev.selection) { // a click: centre the current window length there
         const len = state.t1 - state.t0;
-        const c = x.invert(d3.pointer(ev.sourceEvent, svg.node())[0]);
+        const pe = ev.sourceEvent.changedTouches?.[0] ?? ev.sourceEvent; // a tap ends with a TouchEvent
+        const c = x.invert(d3.pointer(pe, svg.node())[0]);
         return onBrush(new Date(c - len / 2), new Date(+c + len / 2));
       }
       const [a, b] = ev.selection.map(x.invert);
@@ -133,10 +138,10 @@ export function drawTimeline(sel, data, state, onBrush) {
 }
 
 // ---------------------------------------------------------------- hovmöller
-export function drawHovmoller(sel, data, state) {
+export function drawHovmoller(sel, data, state, extraH = 0) {
   const nDays = Math.round((state.t1 - state.t0) / DAY_MS);
   const W = widthOf(sel, 720), narrow = W < 560;
-  const H = Math.max(380, Math.min(900, nDays * 4)), m = { t: 24, r: narrow ? 14 : 16, b: 26, l: narrow ? 54 : 64 };
+  const H = Math.max(380, Math.min(900, nDays * 4)) + extraH, m = { t: 24, r: narrow ? 14 : 16, b: 26, l: narrow ? 54 : 64 };
   const svg = svgIn(sel, W, H);
   const x = d3.scaleLinear().domain([0, 360]).range([m.l, W - m.r]);
   const y = d3.scaleUtc().domain([state.t0, state.t1]).range([m.t, H - m.b]);
@@ -176,10 +181,10 @@ export function drawHovmoller(sel, data, state) {
   if (cur.length) segs.push(cur);
   gR.selectAll("path").data(segs).join("path").attr("class", "rmm-path")
     .attr("d", d3.line().x((d) => x(phaseLon(d.angle))).y((d) => y(d.date)));
-  gR.selectAll("circle").data(rmmDays).join("circle").attr("class", "rmm-dot mark")
+  gR.selectAll("circle").data(rmmDays).join("circle").attr("class", "rmm-dot mark tip-target")
     .attr("data-id", (d) => d.event).attr("cx", (d) => x(phaseLon(d.angle))).attr("cy", (d) => y(d.date))
     .attr("r", (d) => 1.2 + 1.3 * Math.min(d.amp, 3.5))
-    .on("mousemove", (ev, d) => showTip(ev, `<b>${fmtDay(d.date)}</b><br>RMM phase ${d.phase} (${PHASE_REGION[d.phase]})<br>amplitude ${d.amp.toFixed(2)}`))
+    .on("mousemove click", (ev, d) => showTip(ev, `<b>${fmtDay(d.date)}</b><br>RMM phase ${d.phase} (${PHASE_REGION[d.phase]})<br>amplitude ${d.amp.toFixed(2)}`))
     .on("mouseleave", hideTip);
 
   // LPT: full track (thin) and eastward-propagation segments (thick)
@@ -187,8 +192,8 @@ export function drawHovmoller(sel, data, state) {
   const gL = plot.append("g").attr("class", "lpt-only");
   gL.selectAll("path").data(sys.filter((s) => s.track)).join("path").attr("class", "lpt-track mark")
     .attr("data-id", (s) => s.id).attr("d", (s) => d3.line().x((p) => x(p.lon)).y((p) => y(p.t))(s.track));
-  gL.selectAll("g").data(sys).join("g").attr("class", "mark").attr("data-id", (s) => s.id)
-    .on("mousemove", (ev, s) => showTip(ev, describe(s))).on("mouseleave", hideTip)
+  gL.selectAll("g").data(sys).join("g").attr("class", "mark tip-target").attr("data-id", (s) => s.id)
+    .on("mousemove click", (ev, s) => showTip(ev, describe(s))).on("mouseleave", hideTip)
     .selectAll("line").data((s) => s.eprop).join("line").attr("class", "lpt-seg")
     .attr("x1", (e) => x(e.lon_begin)).attr("y1", (e) => y(e.t0))
     .attr("x2", (e) => x(e.lon_end)).attr("y2", (e) => y(e.t1));
@@ -204,14 +209,22 @@ export function drawHovmoller(sel, data, state) {
     emptyText(svg, (m.l + W - m.r) / 2, (m.t + H - m.b) / 2, W - m.l - m.r, "No active MJO in this window");
   }
 
+  // only key what is drawn; with no LPT systems here, say where they are instead
   const nTrack = sys.filter((s) => s.track).length;
   legend(sel, [
-    { cls: "lpt-only", swatch: '<line class="lpt-seg" x1="3" y1="3" x2="25" y2="11"/>', label: "LPT eastward segment" },
-    { cls: "lpt-only", swatch: '<path class="lpt-track" d="M3 3c6 2 4 6 10 5s6 4 12 3"/>',
-      label: `LPT full track <span class="dim">(loaded for Jun 2011 – Jun 2012 only${sys.length && !nTrack ? "; none here" : ""})</span>` },
-    { cls: "rmm-only", swatch: '<circle class="rmm-dot" cx="5" cy="7" r="2.5"/><circle class="rmm-dot" cx="13" cy="7" r="3.8"/><circle class="rmm-dot" cx="23" cy="7" r="5"/>',
-      label: "RMM day, amplitude ≥ 1 <span class=\"dim\">(size = amplitude; approximate longitude)</span>" },
+    ...(sys.length ? [
+      { cls: "lpt-only", swatch: '<line class="lpt-seg" x1="3" y1="3" x2="25" y2="11"/>', label: "LPT eastward segment" },
+      { cls: "lpt-only", swatch: '<path class="lpt-track" d="M3 3c6 2 4 6 10 5s6 4 12 3"/>',
+        label: `LPT full track <span class="dim">(loaded for Jun 2011 – Jun 2012 only${nTrack ? "" : "; none here"})</span>` },
+    ] : []),
+    ...(rmmDays.length ? [
+      { cls: "rmm-only", swatch: '<circle class="rmm-dot" cx="5" cy="7" r="2.5"/><circle class="rmm-dot" cx="13" cy="7" r="3.8"/><circle class="rmm-dot" cx="23" cy="7" r="5"/>',
+        label: "RMM day, amplitude ≥ 1 <span class=\"dim\">(size = amplitude; approximate longitude)</span>" },
+    ] : []),
     { swatch: '<line class="guide" x1="3" y1="3" x2="25" y2="11"/>', label: "5 m/s eastward reference" },
+    ...(sys.length ? [] : [
+      { cls: "lpt-only", label: `<span class="dim">No LPT systems here · LPT covers 1998–2018 ·</span> ${lptLink(state)}` },
+    ]),
   ]);
 }
 
@@ -258,9 +271,9 @@ export function drawPhase(sel, data, state) {
     .attr("data-id", (d) => d.event)
     .attr("x1", (d, i) => s(pts[i].rmm1)).attr("y1", (d, i) => sy(pts[i].rmm2))
     .attr("x2", (d) => s(d.rmm1)).attr("y2", (d) => sy(d.rmm2)).attr("stroke", (d, i) => col(i));
-  g.selectAll("circle.day").data(pts).join("circle").attr("class", "day").attr("r", 5).attr("fill", "transparent")
+  g.selectAll("circle.day").data(pts).join("circle").attr("class", "day tip-target").attr("r", 5).attr("fill", "transparent")
     .attr("cx", (d) => s(d.rmm1)).attr("cy", (d) => sy(d.rmm2))
-    .on("mousemove", (ev, d) => showTip(ev, `<b>${fmtDay(d.date)}</b><br>phase ${d.phase}, amplitude ${d.amp.toFixed(2)}`))
+    .on("mousemove click", (ev, d) => showTip(ev, `<b>${fmtDay(d.date)}</b><br>phase ${d.phase}, amplitude ${d.amp.toFixed(2)}`))
     .on("mouseleave", hideTip);
   // label the first of each month
   const firsts = pts.filter((d) => d.date.getUTCDate() === 1);
@@ -287,10 +300,40 @@ export function drawPhase(sel, data, state) {
 
 // ---------------------------------------------------------------- map
 export function drawMap(sel, data, state) {
-  const LAT = 35, W = widthOf(sel, 1200), H = Math.round(W * 2 * LAT / 360);
+  const root = d3.select(sel), card = root.node().closest(".card");
+  const sub = card.querySelector("h2 .sub");
+  const sys = data.lpt.filter((s) => s.track && inWindow(s.t0, s.t1, state));
+  // Nothing to draw: collapse to one line that says why and where to look instead,
+  // rather than an empty world map.
+  const off = !state.methods.has("lpt");
+  card.classList.toggle("is-empty", off || !sys.length);
+  if (off || !sys.length) {
+    root.selectAll("*").remove();
+    sub.textContent = "LPT centroid tracks";
+    const nIn = data.lpt.filter((s) => inWindow(s.t0, s.t1, state)).length;
+    const msg = off ? "LPT tracking is switched off."
+      : nIn ? `${nIn} LPT system${nIn > 1 ? "s" : ""} here (see the Hovmöller), but full tracks are loaded for Jun 2011 – Jun 2012 only · ${lptLink(state)}`
+        : `No LPT systems in this window · LPT covers 1998–2018, full tracks Jun 2011 – Jun 2012 · ${lptLink(state)}`;
+    root.append("p").attr("class", "empty-line").html(msg);
+    return;
+  }
+
+  // On a phone the whole 0–360° strip is only ~60px tall, so zoom to the tracks
+  // (at least 120° of longitude); wider screens keep the full tropical belt.
+  const LAT = 35, W = widthOf(sel, 1200);
+  let lon0 = 0, span = 360;
+  if (W < 600) {
+    const lons = sys.flatMap((s) => s.track.map((p) => p.lon));
+    let a = Math.floor((d3.min(lons) - 10) / 10) * 10, b = Math.ceil((d3.max(lons) + 10) / 10) * 10;
+    if (b - a < 120) { const c = (a + b) / 2; a = c - 60; b = c + 60; }
+    lon0 = a; span = Math.min(360, b - a);
+  }
+  const H = Math.round(W * 2 * LAT / span);
+  const fmtLon = (l) => { l = ((l % 360) + 360) % 360; return l === 0 || l === 180 ? `${l}°` : l < 180 ? `${l}°E` : `${360 - l}°W`; };
+  sub.textContent = span < 360 ? `LPT centroid tracks · zoomed to ${fmtLon(lon0)}–${fmtLon(lon0 + span)}` : "LPT centroid tracks";
   const svg = svgIn(sel, W, H);
-  // equirectangular, 0°–360°E across the width, ±LAT tall
-  const proj = d3.geoEquirectangular().rotate([-180, 0]).scale(W / (2 * Math.PI)).translate([W / 2, H / 2]);
+  // equirectangular, lon0 … lon0+span across the width, ±LAT tall
+  const proj = d3.geoEquirectangular().rotate([-(lon0 + span / 2), 0]).scale(W / (span * Math.PI / 180)).translate([W / 2, H / 2]);
   const path = d3.geoPath(proj);
   const land = topojson.feature(data.land, data.land.objects.land);
   svg.append("clipPath").attr("id", "map-clip").append("rect").attr("width", W).attr("height", H);
@@ -299,22 +342,13 @@ export function drawMap(sel, data, state) {
   g0.append("path").attr("class", "land").attr("d", path(land));
   svg.append("rect").attr("class", "frame").attr("width", W).attr("height", H);
 
-  const sys = data.lpt.filter((s) => s.track && inWindow(s.t0, s.t1, state));
   const g = g0.append("g").attr("class", "lpt-only");
   const pxy = (p) => proj([p.lon, p.lat]);
-  g.selectAll("path").data(sys).join("path").attr("class", "lpt-map mark").attr("data-id", (s) => s.id)
+  g.selectAll("path").data(sys).join("path").attr("class", "lpt-map mark tip-target").attr("data-id", (s) => s.id)
     .attr("d", (s) => d3.line().x((p) => pxy(p)[0]).y((p) => pxy(p)[1]).curve(d3.curveCatmullRom)(s.track))
-    .on("mousemove", (ev, s) => showTip(ev, describe(s))).on("mouseleave", hideTip);
+    .on("mousemove click", (ev, s) => showTip(ev, describe(s))).on("mouseleave", hideTip);
   g.selectAll("circle").data(sys).join("circle").attr("class", "lpt-start").attr("r", 4)
     .attr("cx", (s) => pxy(s.track[0])[0]).attr("cy", (s) => pxy(s.track[0])[1]);
-
-  if (!sys.length) {
-    const nIn = data.lpt.filter((s) => inWindow(s.t0, s.t1, state)).length;
-    const msg = nIn
-      ? `${nIn} LPT system${nIn > 1 ? "s" : ""} in this window, but full centroid tracks are only loaded for Jun 2011 – Jun 2012`
-      : "No LPT systems in this window (LPT catalogue covers 1998–2018)";
-    emptyText(svg, W / 2, H / 2, W - 24, msg);
-  }
 }
 
 // ---------------------------------------------------------------- list

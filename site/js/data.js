@@ -81,3 +81,8 @@ export const REGIONS = [
 const fmt = d3.utcFormat("%-d %b %Y");
 export const fmtDay = (d) => fmt(d);
 export const fmtRange = (a, b) => `${fmt(a)} – ${fmt(b)}`;
+
+// The URL hash for a view (main.js reads and writes it; charts use it for "see …" links).
+export function hashFor(t0, days, methods) {
+  return `#from=${d3.utcFormat("%Y-%m-%d")(t0)}&days=${days}&m=${["rmm", "lpt"].filter((k) => methods.has(k)).join(",")}`;
+}

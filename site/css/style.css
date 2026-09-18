@@ -177,3 +177,11 @@ button:hover, select:hover { border-color: var(--muted); }
 .foot dt { font-weight: 600; color: var(--ink); }
 .foot dd { margin: 0; }
 .foot a { color: var(--lpt); }
+
+/* ux: a panel with nothing to show collapses to one line with a pointer to data */
+.map-card.is-empty { padding-block: 10px; }
+.map-card.is-empty h2 { margin-bottom: 2px; }
+.empty-line { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.empty-line a, .legend a { color: var(--lpt); font-weight: 600; white-space: nowrap; }
+.hov-card { align-self: start; }
+#timeline:focus-visible { outline-offset: 4px; border-radius: 4px; }
