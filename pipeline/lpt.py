@@ -10,6 +10,8 @@ Sources (Kerns & Chen, https://orca.atmos.washington.edu/data/lpt/):
   tmpa   TRMM/TMPA 3B42 as in Kerns & Chen (2020), Jun 1998 – Jun 2018, 3-hourly
 """
 import re
+import ssl
+import urllib.request
 from pathlib import Path
 
 import pandas as pd
@@ -18,6 +20,30 @@ RAW = Path(__file__).resolve().parents[1] / "data" / "raw"
 LPT_URL = "https://orca.atmos.washington.edu/data/lpt"
 IMERG_DIR = RAW / "imerg_v7"
 IMERG_REMOTE = f"{LPT_URL}/imerg_v7/g50_72h/thresh12/systems"
+TMPA_REMOTE = f"{LPT_URL}/kc2020/20_72h/thresh12/systems"
+IMERG_PERIODS = ["1998010400_2000063023", "2000060100_2005063023", "2005060100_2010063023",
+                 "2010060100_2015063023", "2015060100_2020063023", "2020060100_2025063023",
+                 "2025060100_2026081823"]
+
+
+def fetch():
+    """Download the LPT text files that are not already in data/raw (nothing is committed).
+    The LPT server's TLS chain is incomplete, so certificate checks are off for it."""
+    ctx = ssl._create_unverified_context()
+    files = [(RAW / "mjo_lpt_list.txt", f"{TMPA_REMOTE}/mjo_lpt_list.txt")]
+    files += [(RAW / f"lpt_systems_tmpa_{y}060100_{y + 1}063021.txt",
+               f"{TMPA_REMOTE}/lpt_systems_tmpa_{y}060100_{y + 1}063021.txt") for y in range(1998, 2018)]
+    files += [(IMERG_DIR / f"{kind}_imerg_v7_{p}.txt", f"{IMERG_REMOTE}/{kind}_imerg_v7_{p}.txt")
+              for p in IMERG_PERIODS for kind in ["lpt_systems", "mjo_lpt_list"]]
+    for local, url in files:
+        if local.exists():
+            continue
+        local.parent.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(url, context=ctx, timeout=300) as r:
+            local.write_bytes(r.read())
+        print(f"fetched {local.name}")
+
+
 MIN_OTHER_DAYS = 3  # shorter non-MJO systems are left out
 
 
@@ -126,7 +152,8 @@ def load_imerg():
     # Consecutive tracking periods overlap by a month, so a system can appear in both;
     # the earlier copy is cut off at the period end. Keep the longest copy per start time.
     first = lpt.drop_duplicates(["period", "lptid"])
-    best = first.sort_values("duration", ascending=False).groupby("lpt_begin").head(1)
+    # ties (same system complete in both periods): keep the later period, so ids are stable
+    best = first.sort_values(["duration", "period"], ascending=False, kind="stable").groupby("lpt_begin").head(1)
     same_period = first[first.duplicated("lpt_begin", keep=False)]
     same_period = same_period[same_period.groupby("lpt_begin").period.transform("nunique") == 1]
     keep = set(map(tuple, pd.concat([best, same_period])[["period", "lptid"]].to_numpy()))

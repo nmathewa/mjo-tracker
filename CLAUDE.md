@@ -7,6 +7,11 @@ Website showing MJO tracks from several tracking methods, growing into live fore
 2. **Forecast backend:** run LPT tracking on forecast rainfall.
 3. **Live:** forecast tracks drawn against the archive.
 
+## No datasets in git
+`data/raw/` and `site/data/` are gitignored and rebuilt from the original sources: `pipeline/build.py`
+downloads anything missing (BoM RMM, UW LPT text files) and `pipeline/outlines.py` rebuilds outlines.
+The Pages workflow does the same on every run, keeping downloads + outlines in the Actions cache.
+
 ## Layout
 - `pipeline/build.py` — raw data → `site/data/*.json` + `manifest.json`. Every method is
   reduced to one of two shapes: a daily RMM-space index, or tracked systems in lon/lat/time
@@ -35,7 +40,7 @@ Website showing MJO tracks from several tracking methods, growing into live fore
 - Build data: `~/miniforge3/envs/nma/bin/python pipeline/build.py` (`--fetch` pulls latest RMM from
   `https://www.bom.gov.au/clim_data/IDCKGEM000/rmm.74toRealtime.txt`; the old `climate/mjo/graphics/`
   URL is frozen at 2024-02-24. The fetch refuses a file older than the current one).
-- Deploy: `.github/workflows/pages.yml` — daily 06:30 UTC fetch + rebuild + commit + GitHub Pages.
+- Deploy: `.github/workflows/pages.yml` — daily 06:30 UTC fetch + rebuild + GitHub Pages (no commits; keepalive action).
 - Serve: `~/miniforge3/envs/nma/bin/python pipeline/serve.py` (0.0.0.0:8765, no-cache headers).
 - Browser checks: `@playwright/test` in `node_modules`; run scripts from the repo root.
 

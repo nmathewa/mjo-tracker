@@ -13,12 +13,13 @@ Live site: https://nmathewa.github.io/mjo-tracker/
 ## Run locally
 
 ```bash
-python pipeline/build.py --fetch     # rebuild site/data (numpy, pandas); --fetch pulls the latest RMM
+python pipeline/build.py --fetch     # download sources into data/raw and build site/data; --fetch refreshes RMM
 python pipeline/serve.py             # http://0.0.0.0:8765
 python pipeline/outlines.py          # (slow, optional) real LPT outlines from the upstream mask files
 ```
 
-The site is static (`site/`, no build step). A GitHub Actions workflow rebuilds the data daily and deploys to Pages.
+The site is static (`site/`, no build step). No data is stored in this repository: `pipeline/build.py` downloads
+it from the original sources, and a GitHub Actions workflow rebuilds it daily and deploys to Pages.
 
 ## Data sources
 

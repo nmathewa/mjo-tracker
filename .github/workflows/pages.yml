@@ -1,5 +1,5 @@
-# Daily: pull the latest RMM from BoM, rebuild site/data, commit it, deploy site/ to GitHub Pages.
-# The data commit also keeps the repo active, so GitHub doesn't disable the schedule after 60 days.
+# Daily: rebuild site/data from the original sources (BoM RMM, UW LPT) and deploy site/ to Pages.
+# No data is committed: downloads and LPT outlines live in the Actions cache between runs.
 name: Update data and deploy
 
 on:
@@ -10,7 +10,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  actions: write           # keepalive: stops GitHub disabling the schedule after 60 quiet days
   pages: write
   id-token: write
 
@@ -21,26 +22,30 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -r pipeline/requirements.txt
-      - name: Fetch RMM and rebuild data
-        # a failed download keeps yesterday's data (the page flags stale data itself)
-        run: python pipeline/build.py --fetch || python pipeline/build.py
-      - name: Commit updated data
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/raw site/data
-          git diff --cached --quiet || git commit -m "data: RMM update $(date -u +%F)"
-          git pull --rebase -X theirs && git push
+      - name: Restore downloads and outlines
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/raw
+            site/data/outlines
+          key: data-${{ github.run_id }}
+          restore-keys: data-
+      - name: Build site data
+        run: python pipeline/build.py --fetch
+      - name: Real LPT outlines (only systems not already cached)
+        run: python pipeline/outlines.py --workers 4
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
+      - uses: liskin/gh-workflow-keepalive@v1
   deploy:
     needs: build
     runs-on: ubuntu-latest

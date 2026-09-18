@@ -1,2 +1,7 @@
 numpy
 pandas
+fsspec
+aiohttp
+h5py
+contourpy
+shapely

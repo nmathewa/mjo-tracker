@@ -12,8 +12,10 @@ manifest.json lists the methods, their coverage and their sources, so the page
 never hard-codes what data exists. Adding a method means adding a loader here
 and an entry in the manifest.
 
-    python pipeline/build.py            # use data/raw/rmm.74toRealtime.txt
-    python pipeline/build.py --fetch    # download the latest RMM from BoM first
+    python pipeline/build.py            # download whatever is missing from data/raw, then build
+    python pipeline/build.py --fetch    # also refresh the RMM from BoM
+
+No data is kept in git: data/raw/ and site/data/ are rebuilt from the original sources.
 """
 import argparse
 import json
@@ -25,6 +27,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import lpt
 from lpt import SOURCES
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -129,8 +132,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--fetch", action="store_true", help="download the latest RMM from BoM")
     args = ap.parse_args()
-    if args.fetch:
+    if args.fetch or not RMM_FILE.exists():
+        RAW.mkdir(parents=True, exist_ok=True)
         fetch_rmm()
+    lpt.fetch()
     OUT.mkdir(parents=True, exist_ok=True)
 
     rmm = load_rmm()
