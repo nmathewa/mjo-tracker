@@ -40,6 +40,6 @@ Serve with `~/miniforge3/envs/nma/bin/python -m http.server 8765 -d site`
 - Everything a mouse can do, a keyboard can do; hover-only information needs a
   tap/focus equivalent on touch.
 - Never make the data say more than it does (RMM longitude is approximate; LPT
-  full tracks exist only for 2011–12).
+  tracks cover Jun 1998–Jun 2018 only).
 - Plain ES modules and D3 v7, no build step, no new dependencies unless
   vendored into `site/vendor/`. Match the existing code style.

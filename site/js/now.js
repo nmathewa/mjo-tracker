@@ -22,7 +22,7 @@ export function nowSentence(days) {
   const age = Math.floor((Date.now() - d.date) / DAY_MS);
   const stale = age > STALE_DAYS
     ? ` <span class="stale">Data is ${age} days old — the daily update may have failed.</span>` : "";
-  return `<span class="now-label">Latest (${fmtDay(d.date)}):</span> ${text[0].toUpperCase()}${text.slice(1)}${stale}`;
+  return `<span class="now-label">Current state (RMM, ${fmtDay(d.date)}).</span> ${text[0].toUpperCase()}${text.slice(1)}${stale}`;
 }
 
 // eastward / westward / stalled over the last week, from the unwrapped phase angle

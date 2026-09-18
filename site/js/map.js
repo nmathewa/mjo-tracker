@@ -116,6 +116,8 @@ export function drawMap(sel, data, state) {
     });
   function applyZoomStyles() {
     starts.attr("r", 3.5 / k);
+    // the RMM band label is drawn in world units; keep it 11px on screen at any zoom
+    rmmBand.selectAll("text").attr("y", 14 / k).style("font-size", `${11 / k}px`);
     world.style("--k", k);
   }
   function drawAxis(t) {
@@ -220,7 +222,11 @@ export function drawMap(sel, data, state) {
     });
     ui.stopBtn = bPlay;
   }
-  root.append("p").attr("class", "note").text("Drag to pan, scroll or +/− to zoom. ▶ plays the window: discs show each system's rain area at that moment (a circle of equal area, not its real shape). Click a track for that system's details.");
+  root.append("p").attr("class", "caption").html("Centroid tracks of MJO rain systems from Large-scale Precipitation Tracking " +
+    "(Kerns &amp; Chen 2020; TMPA rainfall, Jun 1998 – Jun 2018 only); open circles mark where each system began. " +
+    "Pressing ▶ plays the window: discs show each system's rain area at that moment as a circle of equal area, not its real shape, " +
+    "and the shaded band marks the <em>approximate</em> longitude of the current RMM phase when the MJO is active. " +
+    "Drag to pan, scroll or +/− to zoom; click a track for that system's details.");
 
   setTime(ui.t);
   drawOthers();

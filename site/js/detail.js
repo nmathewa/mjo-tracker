@@ -1,8 +1,8 @@
 // Detail view for one LPT system, opened by clicking it (map, Hovmöller or event list).
-// Laid out after Kerns & Chen (2020) Fig. 1: (b) rain-area footprints coloured by date,
-// (a) longitude–time track, (c) centroid longitude, (d) zonal speed, (e) propagation.
+// Laid out after Kerns & Chen (2020) Fig. 1, lettered column by column: (a) rain-area footprints
+// coloured by date, (b) longitude–time track, (c) centroid longitude, (d) zonal speed, (e) propagation.
 import { fmtDay } from "./data.js";
-import { showTip, hideTip } from "./charts.js";
+import { showTip, hideTip, axisTitle } from "./charts.js";
 
 const KM_PER_DEG = 111.2;
 const fmtT = d3.utcFormat("%-d %b %H UTC");
@@ -33,23 +33,22 @@ export function drawDetail(sel, data, s, { onClose, onShow }) {
   const tcol = d3.scaleSequential((u) => d3.interpolateTurbo(0.05 + 0.9 * u)).domain([s.t0, s.t1]);
 
   const head = card.append("div").attr("class", "detail-head");
-  head.append("h2").html(`LPT system ${s.lpt_index} <span class="sub">${fmtDay(s.t0)} – ${fmtDay(s.t1)} · ${Math.round(s.duration_days)} days · MJO</span>`);
+  head.append("h2").html(`MJO rain system LPT ${s.lpt_index} <span class="sub">${fmtDay(s.t0)} – ${fmtDay(s.t1)} · ${Math.round(s.duration_days)} days</span>`);
   const btns = head.append("div").attr("class", "detail-btns");
   btns.append("button").attr("type", "button").text("Show in timeline").on("click", onShow);
   btns.append("button").attr("type", "button").attr("class", "close").attr("aria-label", "Close details").text("×").on("click", onClose);
-  const facts = s.eprop.map((e) => `eastward ${fmtDay(e.t0)} – ${fmtDay(e.t1)}: ${fmtLon(e.lon_begin)} → ${fmtLon(e.lon_end)} at ${e.speed_ms} m/s`);
-  card.append("p").attr("class", "note").text(facts.join(" · "));
+  const facts = s.eprop.map((e) => `${fmtDay(e.t0)} – ${fmtDay(e.t1)}, ${fmtLon(e.lon_begin)} → ${fmtLon(e.lon_end)} at ${e.speed_ms} m s⁻¹`);
 
   const grid = card.append("div").attr("class", "detail-grid");
-  const panel = (cls, title) => {
+  const panel = (cls, letter, title) => {
     const d = grid.append("div").attr("class", `panel ${cls}`);
-    d.append("h3").html(title);
+    d.append("h3").html(`<span class="panel-letter">(${letter})</span> ${title}`);
     return d;
   };
 
-  // ---- (b) footprints map
+  // ---- (a) footprints map
   {
-    const p = panel("p-map", "Rain-area footprints <span class=\"sub\">colour = date</span>");
+    const p = panel("p-map", "a", "Rain-area footprints <span class=\"sub\">colour = date</span>");
     const W = Math.max(280, p.node().clientWidth || 600);
     const lons = tr.flatMap((q) => [q.lon - rDeg(q), q.lon + rDeg(q)]), lats = tr.flatMap((q) => [q.lat - rDeg(q), q.lat + rDeg(q)]);
     let a = d3.min(lons) - 4, b = d3.max(lons) + 4, c = Math.max(-60, d3.min(lats) - 4), d = Math.min(60, d3.max(lats) + 4);
@@ -90,33 +89,36 @@ export function drawDetail(sel, data, s, { onClose, onShow }) {
     const stops = d3.range(0, 1.001, 0.1).map((u) => `<stop offset="${u}" stop-color="${tcol(+s.t0 + u * (s.t1 - s.t0))}"/>`).join("");
     p.append("div").attr("class", "legend").html(`<span class="key time-key"><span>${fmtDay(s.t0)}</span>` +
       `<svg class="ramp" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="det-ramp">${stops}</linearGradient></defs><rect width="100" height="8" rx="4" fill="url(#det-ramp)"/></svg>` +
-      `<span>${fmtDay(s.t1)}</span></span><span class="key dim">Each circle has the system's rain area at that time (not its real shape); black line = centroid.</span>`);
+      `<span>${fmtDay(s.t1)}</span></span>`);
   }
 
   // shared time axis for the line panels
-  const small = (p, h) => {
-    const W = Math.max(260, p.node().clientWidth || 500), m = { t: 8, r: 10, b: 22, l: 44 };
+  const small = (p, h, xTitle) => {
+    const W = Math.max(260, p.node().clientWidth || 500), m = { t: 8, r: 10, b: xTitle ? 38 : 22, l: 58 };
     const x = d3.scaleUtc().domain([s.t0, s.t1]).range([m.l, W - m.r]);
     const svg = p.append("svg").attr("viewBox", `0 0 ${W} ${h}`);
     svg.append("g").attr("class", "axis").attr("transform", `translate(0,${h - m.b})`)
-      .call(d3.axisBottom(x).ticks(Math.max(3, Math.floor(W / 90))).tickFormat(d3.utcFormat("%-d %b")));
+      .call(d3.axisBottom(x).ticks(Math.max(3, Math.floor(W / 90))).tickSizeOuter(0).tickFormat(d3.utcFormat("%-d %b")));
+    if (xTitle) axisTitle(svg, (m.l + W - m.r) / 2, h - 5, xTitle);
     // eastward-propagation periods shaded behind every line panel (panel e in the paper)
     svg.append("g").selectAll("rect").data(s.eprop).join("rect").attr("class", "eprop-band")
       .attr("x", (e) => x(e.t0)).attr("width", (e) => Math.max(1, x(e.t1) - x(e.t0))).attr("y", m.t).attr("height", h - m.t - m.b);
     return { svg, x, W, m, h };
   };
 
-  // ---- (a) longitude–time
+  // ---- (b) longitude–time
   {
-    const p = panel("p-hov", "Longitude–time <span class=\"sub\">circles = rain-area radius</span>");
+    const p = panel("p-hov", "b", "Longitude–time <span class=\"sub\">circles = rain-area radius</span>");
     const W = Math.max(260, p.node().clientWidth || 500), h = Math.round(Math.min(460, Math.max(260, s.duration_days * 7)));
-    const m = { t: 8, r: 10, b: 22, l: 52 };
+    const m = { t: 8, r: 10, b: 38, l: 66 };
     const lo = d3.min(tr, (q) => q.lon - rDeg(q)) - 3, hi = d3.max(tr, (q) => q.lon + rDeg(q)) + 3;
     const x = d3.scaleLinear().domain([lo, hi]).range([m.l, W - m.r]);
     const y = d3.scaleUtc().domain([s.t0, s.t1]).range([m.t, h - m.b]);
     const svg = p.append("svg").attr("viewBox", `0 0 ${W} ${h}`);
-    svg.append("g").attr("class", "axis").attr("transform", `translate(0,${h - m.b})`).call(d3.axisBottom(x).ticks(Math.floor(W / 70)).tickFormat(fmtLon));
-    svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(6).tickFormat(d3.utcFormat("%-d %b")));
+    svg.append("g").attr("class", "axis").attr("transform", `translate(0,${h - m.b})`).call(d3.axisBottom(x).ticks(Math.floor(W / 70)).tickSizeOuter(0).tickFormat(fmtLon));
+    svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(6).tickSizeOuter(0).tickFormat(d3.utcFormat("%-d %b")));
+    axisTitle(svg, (m.l + W - m.r) / 2, h - 5, "Longitude");
+    axisTitle(svg, 12, (m.t + h - m.b) / 2, "Date (UTC)", -90);
     svg.append("g").selectAll("rect").data(s.eprop).join("rect").attr("class", "eprop-band")
       .attr("x", m.l).attr("width", W - m.l - m.r).attr("y", (e) => y(e.t0)).attr("height", (e) => Math.max(1, y(e.t1) - y(e.t0)));
     svg.append("g").selectAll("circle").data(tr.filter((q, i) => i % 2 === 0)).join("circle").attr("class", "foot foot-hov")
@@ -129,8 +131,9 @@ export function drawDetail(sel, data, s, { onClose, onShow }) {
 
   // ---- (c) centroid longitude
   {
-    const p = panel("p-lon", "Centroid longitude");
+    const p = panel("p-lon", "c", "Centroid longitude");
     const { svg, x, W, m, h } = small(p, 170);
+    axisTitle(svg, 12, (m.t + h - m.b) / 2, "Longitude", -90);
     const y = d3.scaleLinear().domain(d3.extent(tr, (q) => q.lon)).nice().range([h - m.b, m.t]);
     svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickFormat(fmtLon));
     svg.append("g").selectAll("line").data(tr.slice(1).map((q, i) => [tr[i], q])).join("line")
@@ -141,8 +144,9 @@ export function drawDetail(sel, data, s, { onClose, onShow }) {
 
   // ---- (d) zonal speed
   {
-    const p = panel("p-spd", "Zonal speed <span class=\"sub\">m s⁻¹ · eastward positive</span>");
+    const p = panel("p-spd", "d", "Zonal speed <span class=\"sub\">eastward positive</span>");
     const { svg, x, W, m, h } = small(p, 170);
+    axisTitle(svg, 12, (m.t + h - m.b) / 2, "Speed (m s⁻¹)", -90);
     const u = zonalSpeed(tr), L = 15;
     const y = d3.scaleLinear().domain([-L, L]).range([h - m.b, m.t]).clamp(true);
     svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5));
@@ -155,8 +159,8 @@ export function drawDetail(sel, data, s, { onClose, onShow }) {
 
   // ---- (e) propagation
   {
-    const p = panel("p-prop", "Propagation <span class=\"sub\">from the LPT MJO list</span>");
-    const { svg, x, m, h } = small(p, 64);
+    const p = panel("p-prop", "e", "Propagation <span class=\"sub\">from the LPT MJO list</span>");
+    const { svg, x, m, h } = small(p, 80, "Date (UTC)");
     svg.selectAll(".eprop-band").attr("class", "eprop-band strong");
     svg.append("text").attr("x", m.l - 6).attr("y", (h - m.b + m.t) / 2).attr("dy", "0.35em").attr("text-anchor", "end").text("East");
     svg.selectAll(".eprop-band").each(function (e) {
@@ -167,6 +171,15 @@ export function drawDetail(sel, data, s, { onClose, onShow }) {
       '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line class="det-seg east" x1="2" y1="7" x2="26" y2="7"/></svg>eastward-propagation period</span>' +
       '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line class="det-seg west" x1="2" y1="7" x2="26" y2="7"/></svg>rest of the system\'s life</span>');
   }
+
+  card.append("p").attr("class", "caption").html(
+    `LPT MJO system ${s.lpt_index}, ${fmtDay(s.t0)} – ${fmtDay(s.t1)} (${Math.round(s.duration_days)} days), laid out after ` +
+    `Kerns &amp; Chen (2020, Fig. 1). (a) Rain-area footprints every 6 h, coloured by date and drawn as circles of equal area ` +
+    `(not the system's real shape), with the centroid track; the open circle marks the start. (b) Longitude–time track of the ` +
+    `centroid, red during eastward propagation and blue otherwise; circles are scaled to the rain-area radius. (c) Centroid ` +
+    `longitude. (d) Zonal speed of the centroid (centred difference over ±12 h). (e) Eastward-propagation periods from the LPT ` +
+    `MJO list: ${facts.join("; ")}. Light red shading in (b)–(d) marks the same periods. TMPA-based LPT tracks cover ` +
+    `Jun 1998 – Jun 2018 only.`);
 }
 
 function nearest(arr, t) { return d3.least(arr, (d) => Math.abs(d.t - t)); }

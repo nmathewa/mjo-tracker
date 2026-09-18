@@ -39,7 +39,7 @@ Read the screenshots. Don't claim something looks right without looking.
 
 - Scientific honesty beats decoration. Never change what the data says: RMM on
   the Hovmöller is an *approximate* longitude and must stay labelled so; LPT
-  full tracks exist only for 2011–12 and the page must not imply otherwise.
+  tracks cover Jun 1998–Jun 2018 only; rain-area discs are equal-area circles, not real shapes.
 - Method colours are the identity of the site: RMM = `--rmm`, LPT = `--lpt`.
   A new method gets a new token in both themes. Colour is never the only cue —
   pair it with a label, shape or line style.

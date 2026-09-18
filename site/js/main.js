@@ -194,21 +194,35 @@ window.addEventListener("hashchange", () => {
   }
 });
 
-// about
+// data and methods (the About content, laid out as a methods section)
 const [rmmM, lptM] = data.manifest.methods;
 const r = rmmM.event_rule;
-document.getElementById("about").innerHTML = `<dl>
-  <dt>RMM</dt><dd>${rmmM.long_name}, daily, ${rmmM.coverage.join(" to ")}. Source: <a href="${rmmM.source}">Bureau of Meteorology</a>.
-    ${rmmM.note} An <em>event</em> here is a spell with amplitude ≥ ${r.min_amp} (dips ≤ ${r.gap_days} days allowed)
-    lasting at least ${r.min_days} days and moving at least ${r.min_east_deg}° eastward around the phase diagram
-    (${rmmM.n_events} events).</dd>
-  <dt>LPT</dt><dd>${lptM.long_name}: rain systems tracked in ${lptM.source}, ${lptM.coverage.join(" to ")}.
-    ${lptM.n_systems} MJO systems with full centroid tracks, plus ${lptM.n_other} other (non-MJO) systems lasting ≥ 3 days,
-    shown on the map when switched on. Data: <a href="${lptM.source_url}">LPT data access (Kerns, Univ. of Washington)</a>.
-    Rain areas are drawn as circles of equal area, not the systems' real shapes.</dd>
-  <dt>Hovmöller</dt><dd>RMM is an index, not a location. Its days are placed at the longitude where each phase's
-    rain usually sits (Wheeler &amp; Hendon 2004 composites), so read the orange dots as approximate.</dd>
-</dl>`;
+const cite = (id, txt) => `<a href="#ref-${id}">${txt}</a>`;
+document.getElementById("about").innerHTML = `
+  <h3>RMM index</h3>
+  <p>The ${rmmM.long_name.replace("(Wheeler & Hendon 2004)", `(${cite("wh04", "Wheeler &amp; Hendon 2004")})`)} is used daily
+    from ${rmmM.coverage.join(" to ")}, as published by the <a href="${rmmM.source}">Australian Bureau of Meteorology</a>.
+    An <em>RMM event</em> here is a spell with amplitude ≥ ${r.min_amp} (dips of ≤ ${r.gap_days} days allowed) that lasts
+    at least ${r.min_days} days and advances at least ${r.min_east_deg}° eastward around the phase diagram; the record
+    contains ${rmmM.n_events} such events.</p>
+  <h3>Large-scale Precipitation Tracking</h3>
+  <p>${lptM.long_name.replace("(Kerns & Chen 2016, 2020)", `(${cite("kc16", "Kerns &amp; Chen 2016")}, ${cite("kc20", "2020")})`)}
+    follows contiguous areas of heavy time-averaged rain; here from ${lptM.source}, ${lptM.coverage.join(" to ")}.
+    The archive includes ${lptM.n_systems} MJO systems with full centroid tracks, plus ${lptM.n_other} other (non-MJO)
+    systems lasting ≥ 3 days, shown on the map when switched on. A system can have several eastward-propagation
+    segments, and the event table lists one row per segment. Data: <a href="${lptM.source_url}">LPT data access
+    (Kerns, University of Washington)</a>.</p>
+  <h3>Caveats</h3>
+  <ul class="caveats">
+    <li><b>Approximate RMM longitude.</b> RMM is an index, not a location. On the Hovmöller diagram and map its days are
+      placed at the longitude where each phase's rain usually sits (${cite("wh04", "Wheeler &amp; Hendon 2004")} composites),
+      so read the RMM marks as approximate.</li>
+    <li><b>LPT coverage.</b> LPT tracks cover ${lptM.coverage.map((d) => d3.utcFormat("%b %Y")(parseDay(d))).join(" – ")} only
+      (TMPA rainfall); windows outside that period show RMM alone.</li>
+    <li><b>Rain-area discs.</b> Rain areas are drawn as circles of equal area, not the systems' real shapes.</li>
+    <li><b>ENSO removal.</b> ${rmmM.note}</li>
+  </ul>`;
+document.getElementById("cite-url").textContent = location.href.split("#")[0];
 document.getElementById("now").innerHTML = nowSentence(data.days);
 document.getElementById("built").textContent = `Data built ${data.manifest.built}.`;
 

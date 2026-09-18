@@ -53,6 +53,12 @@ function legend(sel, items) {
   return div;
 }
 
+// axis title, publication style: centred on the axis, rotated for y
+export function axisTitle(svg, x, y, text, rot = 0) {
+  return svg.append("text").attr("class", "axis-title").attr("text-anchor", "middle")
+    .attr("transform", `translate(${x},${y})${rot ? ` rotate(${rot})` : ""}`).text(text);
+}
+
 // time cursors on the Hovmöller and phase diagram, driven by the map slider ("mjo:time")
 const cursor = { hov: null, phase: null };
 document.addEventListener("mjo:time", (ev) => {
@@ -108,7 +114,7 @@ export function drawTimeline(sel, data, state, onBrush) {
   }
 
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`)
-    .call(d3.axisBottom(x).ticks(d3.utcYear.every(narrow ? 10 : 5)).tickSizeOuter(0));
+    .call(d3.axisBottom(x).ticks(d3.utcYear.every(narrow ? 10 : 5)).tickSize(4).tickSizeOuter(0));
   svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`)
     .call(d3.axisLeft(y).tickValues([0, 1, 2]).tickFormat(d3.format("d")).tickSize(3));
   svg.append("line").attr("class", "amp-line1").attr("x1", m.l).attr("x2", W - m.r).attr("y1", y(1)).attr("y2", y(1));
@@ -158,7 +164,7 @@ export function drawTimeline(sel, data, state, onBrush) {
 export function drawHovmoller(sel, data, state, extraH = 0) {
   const nDays = Math.round((state.t1 - state.t0) / DAY_MS);
   const W = widthOf(sel, 720), narrow = W < 560;
-  const H = Math.max(380, Math.min(900, nDays * 4)) + extraH, m = { t: 24, r: narrow ? 14 : 16, b: 26, l: narrow ? 54 : 64 };
+  const H = Math.max(380, Math.min(900, nDays * 4)) + extraH, m = { t: 24, r: narrow ? 14 : 16, b: 40, l: narrow ? 70 : 80 };
   const svg = svgIn(sel, W, H);
   const x = d3.scaleLinear().domain([0, 360]).range([m.l, W - m.r]);
   const y = d3.scaleUtc().domain([state.t0, state.t1]).range([m.t, H - m.b]);
@@ -175,9 +181,11 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
     .text((d) => (useShort && !fits(d) ? ABBR[d.name] : d.name))
     .append("title").text((d) => d.name);
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`)
-    .call(d3.axisBottom(x).tickValues(d3.range(0, 361, 60)).tickFormat((d) => `${d > 180 ? 360 - d : d}°${d === 0 || d === 180 || d === 360 ? "" : d > 180 ? "W" : "E"}`));
+    .call(d3.axisBottom(x).tickValues(d3.range(0, 361, 60)).tickSizeOuter(0).tickFormat((d) => `${d > 180 ? 360 - d : d}°${d === 0 || d === 180 || d === 360 ? "" : d > 180 ? "W" : "E"}`));
   svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`)
-    .call(d3.axisLeft(y).ticks(Math.round(H / 60)).tickFormat(d3.utcFormat("%-d %b %y")));
+    .call(d3.axisLeft(y).ticks(Math.round(H / 60)).tickSizeOuter(0).tickFormat(d3.utcFormat("%-d %b %y")));
+  axisTitle(svg, (m.l + W - m.r) / 2, H - 6, "Longitude");
+  axisTitle(svg, 14, (m.t + H - m.b) / 2, "Date (UTC)", -90);
 
   svg.append("clipPath").attr("id", "hov-clip").append("rect")
     .attr("x", m.l).attr("y", m.t).attr("width", W - m.l - m.r).attr("height", H - m.t - m.b);
@@ -222,7 +230,7 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
   const tEnd = addDays(t0, Math.min(nDays - 4, 30));
   const guide = svg.append("g");
   guide.append("line").attr("class", "guide").attr("x1", x(lon0)).attr("y1", y(t0)).attr("x2", x(lon0 + sp * (tEnd - t0) / DAY_MS)).attr("y2", y(tEnd));
-  guide.append("text").attr("class", "halo").attr("x", x(lon0 + sp * (tEnd - t0) / DAY_MS) + 4).attr("y", y(tEnd)).attr("dy", "0.35em").text("5 m/s");
+  guide.append("text").attr("class", "halo").attr("x", x(lon0 + sp * (tEnd - t0) / DAY_MS) + 4).attr("y", y(tEnd)).attr("dy", "0.35em").text("5 m s⁻¹");
 
   if (!rmmDays.length && !tracked.length) {
     emptyText(svg, (m.l + W - m.r) / 2, (m.t + H - m.b) / 2, W - m.l - m.r, "No active MJO in this window");
@@ -238,7 +246,7 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
       { cls: "rmm-only", swatch: '<circle class="rmm-dot" cx="5" cy="7" r="2.5"/><circle class="rmm-dot" cx="13" cy="7" r="3.8"/><circle class="rmm-dot" cx="23" cy="7" r="5"/>',
         label: "RMM day, amplitude ≥ 1 <span class=\"dim\">(size = amplitude; approximate longitude)</span>" },
     ] : []),
-    { swatch: '<line class="guide" x1="3" y1="3" x2="25" y2="11"/>', label: "5 m/s eastward reference" },
+    { swatch: '<line class="guide" x1="3" y1="3" x2="25" y2="11"/>', label: "5 m s⁻¹ eastward reference" },
     ...(sys.length ? [] : [
       { cls: "lpt-only", label: `<span class="dim">No LPT systems here · LPT tracks cover Jun 1998 – Jun 2018 ·</span> ${lptLink(state)}` },
     ]),
@@ -247,36 +255,43 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
 
 // ---------------------------------------------------------------- phase diagram
 export function drawPhase(sel, data, state) {
-  const S = Math.min(widthOf(sel, 420), 480), m = 28, R = 4;
-  const svg = svgIn(sel, S, S).style("max-width", `${S}px`);
-  const s = d3.scaleLinear().domain([-R, R]).range([m, S - m]);
-  const sy = d3.scaleLinear().domain([-R, R]).range([S - m, m]);
-  const c = s(0), unit = s(1) - s(0);
+  // square plot area with outward ticks and axis titles, after Wheeler & Hendon (2004) Fig. 7
+  const S = Math.min(widthOf(sel, 420), 480), R = 4;
+  const m = { t: 10, r: 10, b: 40, l: 44 }, P = S - m.l - m.r, H = P + m.t + m.b;
+  const svg = svgIn(sel, S, H).style("max-width", `${S}px`);
+  const s = d3.scaleLinear().domain([-R, R]).range([m.l, m.l + P]);
+  const sy = d3.scaleLinear().domain([-R, R]).range([m.t + P, m.t]);
+  const cx = s(0), cy = sy(0), unit = s(1) - s(0);
 
   for (let k = 0; k < 4; k++) {
     const a = k * Math.PI / 4;
     svg.append("line").attr("class", "sector")
-      .attr("x1", c - R * unit * Math.cos(a)).attr("y1", c + R * unit * Math.sin(a))
-      .attr("x2", c + R * unit * Math.cos(a)).attr("y2", c - R * unit * Math.sin(a));
+      .attr("x1", cx - R * unit * Math.cos(a)).attr("y1", cy + R * unit * Math.sin(a))
+      .attr("x2", cx + R * unit * Math.cos(a)).attr("y2", cy - R * unit * Math.sin(a));
   }
-  svg.append("rect").attr("class", "frame").attr("x", m).attr("y", m).attr("width", S - 2 * m).attr("height", S - 2 * m);
-  svg.append("circle").attr("class", "circle1").attr("cx", c).attr("cy", c).attr("r", unit);
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${m.t + P})`)
+    .call(d3.axisBottom(s).tickValues(d3.range(-R, R + 1)).tickSize(4).tickSizeOuter(0));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`)
+    .call(d3.axisLeft(sy).tickValues(d3.range(-R, R + 1)).tickSize(4).tickSizeOuter(0));
+  svg.append("rect").attr("class", "frame").attr("x", m.l).attr("y", m.t).attr("width", P).attr("height", P);
+  axisTitle(svg, cx, H - 6, "RMM1");
+  axisTitle(svg, 12, cy, "RMM2", -90);
+  svg.append("circle").attr("class", "circle1").attr("cx", cx).attr("cy", cy).attr("r", unit);
   for (let k = 1; k <= 8; k++) {
     const a = (-180 + 45 * (k - 1) + 22.5) * Math.PI / 180, r = 3.5 * unit;
-    svg.append("text").attr("class", "phase-num").attr("x", c + r * Math.cos(a)).attr("y", c - r * Math.sin(a)).text(k);
+    svg.append("text").attr("class", "phase-num").attr("x", cx + r * Math.cos(a)).attr("y", cy - r * Math.sin(a)).text(k);
   }
-  const lab = [["Indian Ocean", c, S - m + 16], ["Western Pacific", c, m - 10],
-    ["Maritime Continent", S - m + 12, c], ["W. Hem. & Africa", m - 12, c]];
+  // region names inside the frame edges
+  const lab = [["Indian Ocean", cx, m.t + P - 8], ["Western Pacific", cx, m.t + 14],
+    ["Maritime Continent", m.l + P - 10, cy], ["W. Hem. & Africa", m.l + 10, cy]];
   lab.forEach(([t, x, y], i) => {
-    const el = svg.append("text").attr("class", "region").attr("x", x).attr("y", y).text(t);
+    const el = svg.append("text").attr("class", "region halo").attr("x", x).attr("y", y).attr("dy", i >= 2 ? "0.35em" : null).text(t);
     if (i >= 2) el.attr("transform", `rotate(${i === 2 ? 90 : -90},${x},${y})`);
   });
-  svg.append("text").attr("x", S - m - 4).attr("y", c - 4).attr("text-anchor", "end").text("RMM1");
-  svg.append("text").attr("x", c + 4).attr("y", m + 12).text("RMM2");
 
   const pts = data.days.filter((d) => d.date >= state.t0 && d.date < state.t1 && d.amp !== null);
   if (!pts.length) {
-    emptyText(svg, c, c + 40, S - 2 * m, "No RMM data in this window");
+    emptyText(svg, cx, cy + 40, P, "No RMM data in this window");
     return;
   }
   // time runs along viridis; trimmed so both ends keep contrast on the card

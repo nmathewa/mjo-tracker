@@ -6,16 +6,28 @@
   <title>MJO Track Archive</title>
   <meta name="description" content="Archive of Madden–Julian Oscillation events tracked by the RMM index and LPT precipitation tracking.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <header class="top">
-    <div class="brand">
-      <p class="eyebrow">Madden–Julian Oscillation · 1979 to today</p>
-      <h1>MJO Track Archive</h1>
-      <p class="tag">The Madden–Julian Oscillation is a slow eastward pulse of tropical storms, 30–60 days round the globe. Pick a window to see how different tracking methods follow it.</p>
+    <p class="eyebrow">Tropical intraseasonal variability · Data archive</p>
+    <h1>MJO Track Archive</h1>
+    <p class="subtitle">Madden–Julian Oscillation events from the RMM index (1979–present) and Large-scale Precipitation Tracking (Jun 1998 – Jun 2018)</p>
+    <div class="abstract">
+      <p><span class="run-in">Summary.</span> The Madden–Julian Oscillation (MJO) is the dominant mode of tropical intraseasonal
+        variability: a planetary-scale envelope of enhanced rainfall that travels eastward along the equator, returning
+        every 30–60 days. This archive sets two ways of following it side by side — the Real-time Multivariate MJO
+        index (RMM; Wheeler &amp; Hendon 2004), a daily index of upper- and lower-level wind and cloudiness, and Large-scale
+        Precipitation Tracking (LPT; Kerns &amp; Chen 2016, 2020), which follows the rain systems themselves. Choose a time
+        window below; all figures update together, and the page address records the view.</p>
       <p id="now" class="now" aria-live="polite"></p>
     </div>
+    <nav class="toc" aria-label="Sections">
+      <a href="#figures">Figures</a><a href="#methods">Data and methods</a><a href="#references">References</a><a href="#cite">How to cite</a>
+    </nav>
   </header>
 
   <nav class="controls" aria-label="View controls">
@@ -41,43 +53,76 @@
     </fieldset>
   </nav>
 
-  <section class="card timeline-card" aria-labelledby="tl-h">
-    <h2 id="tl-h">Archive <span class="sub">drag or click to choose a window</span></h2>
+  <section id="figures" class="card fig timeline-card" aria-labelledby="tl-h">
+    <h2 id="tl-h">Archive overview <span class="sub">drag or click to choose a window</span></h2>
     <div id="timeline" class="chart"></div>
+    <p class="caption">RMM amplitude, 1979 to present, smoothed to the bin width shown (dashed line: amplitude 1, the usual
+      threshold for an active MJO), and the periods covered by LPT MJO systems (ticks; Jun 1998 – Jun 2018 only). The
+      highlighted interval is the window shown in all other figures.</p>
   </section>
 
   <main class="grid">
-    <section class="card map-card" aria-labelledby="map-h">
-      <h2 id="map-h">Map <span class="sub">MJO rain systems (LPT) · pan, zoom, play</span></h2>
+    <section class="card fig map-card" aria-labelledby="map-h">
+      <h2 id="map-h">Map of LPT tracks <span class="sub">pan, zoom, play</span></h2>
       <div id="map" class="chart"></div>
     </section>
-    <section id="detail" class="card detail-card" aria-label="Selected system details" hidden></section>
+    <section id="detail" class="card fig detail-card" aria-label="Selected system details" hidden></section>
 
-    <section class="card hov-card" aria-labelledby="hov-h">
-      <h2 id="hov-h">Hovmöller <span class="sub">longitude vs. time · eastward = down and right</span></h2>
+    <section class="card fig hov-card" aria-labelledby="hov-h">
+      <h2 id="hov-h">Longitude–time (Hovmöller) diagram</h2>
       <div id="hovmoller" class="chart"></div>
-      <p class="note">LPT follows tracked rain systems directly. RMM is an index, not a location: its days are placed at the
-        <em>approximate</em> longitude of their phase (Wheeler &amp; Hendon 2004 composites).</p>
+      <p class="caption">Longitude–time diagram of the window; time increases downward, so eastward propagation runs down
+        and to the right. LPT lines are centroid tracks of tracked rain systems (available Jun 1998 – Jun 2018 only; click one for details). RMM is an index,
+        not a location: its active days (amplitude ≥ 1) are placed at the <em>approximate</em> longitude of their phase,
+        from the Wheeler &amp; Hendon (2004) composites. The dotted line is a 5&nbsp;m&nbsp;s⁻¹ eastward reference.</p>
     </section>
 
-    <section class="card phase-card" aria-labelledby="ph-h">
+    <section class="card fig phase-card" aria-labelledby="ph-h">
       <h2 id="ph-h">RMM phase diagram</h2>
       <div id="phase" class="chart"></div>
-      <p class="note">Counter-clockwise = eastward. Inside the circle (amplitude &lt; 1) the MJO is weak. Dots mark the 1st of each month.</p>
+      <p class="caption">(RMM1, RMM2) phase space after Wheeler &amp; Hendon (2004). Counter-clockwise motion is eastward
+        propagation; numbers are the eight MJO phases, labelled with where enhanced convection sits. Inside the unit circle
+        (amplitude &lt; 1) the MJO is weak. Colour runs with time; small labelled dots mark the 1st of each month.</p>
     </section>
 
-
     <section class="card list-card" aria-labelledby="list-h">
-      <h2 id="list-h">Events in window</h2>
+      <h2 id="list-h"><span class="tab-no">Table 1.</span> Events in the window</h2>
       <ul id="events" class="events"></ul>
     </section>
   </main>
 
-  <footer class="foot">
-    <details>
-      <summary>About the methods and data</summary>
+  <article class="paper">
+    <section id="methods" aria-labelledby="methods-h">
+      <h2 id="methods-h">Data and methods</h2>
       <div id="about"></div>
-    </details>
+    </section>
+
+    <section id="references" aria-labelledby="refs-h">
+      <h2 id="refs-h">References</h2>
+      <ol class="refs">
+        <li id="ref-kc16">Kerns, B. W., and S. S. Chen, 2016: Large-scale precipitation tracking and the MJO over the Maritime
+          Continent and Indo-Pacific warm pool. <i>J. Geophys. Res. Atmos.</i>, <b>121</b>, 8755–8776,
+          <a href="https://doi.org/10.1002/2015JD024661">https://doi.org/10.1002/2015JD024661</a>.</li>
+        <li id="ref-kc20">Kerns, B. W., and S. S. Chen, 2020: A 20-year climatology of Madden–Julian Oscillation convection:
+          Large-scale precipitation tracking from TRMM-GPM rainfall. <i>J. Geophys. Res. Atmos.</i>, <b>125</b>,
+          e2019JD032142, <a href="https://doi.org/10.1029/2019JD032142">https://doi.org/10.1029/2019JD032142</a>.</li>
+        <li id="ref-wh04">Wheeler, M. C., and H. H. Hendon, 2004: An all-season real-time multivariate MJO index: Development of
+          an index for monitoring and prediction. <i>Mon. Wea. Rev.</i>, <b>132</b>, 1917–1932,
+          <a href="https://doi.org/10.1175/1520-0493(2004)132%3C1917:AARMMI%3E2.0.CO;2">https://doi.org/10.1175/1520-0493(2004)132&lt;1917:AARMMI&gt;2.0.CO;2</a>.</li>
+      </ol>
+    </section>
+
+    <section id="cite" aria-labelledby="cite-h">
+      <h2 id="cite-h">How to cite and data sources</h2>
+      <p>This site redistributes and visualises published datasets; please cite the original work. For the RMM index, cite
+        Wheeler &amp; Hendon (2004) and acknowledge the Australian Bureau of Meteorology, which publishes the daily
+        values. For LPT systems, cite Kerns &amp; Chen (2016) for the method and Kerns &amp; Chen (2020) for the TMPA-based
+        MJO database. To refer to a particular view on this site, give its full address (it encodes the window,
+        methods and selected system) and the date of access: <span id="cite-url" class="mono"></span>.</p>
+    </section>
+  </article>
+
+  <footer class="colophon">
     <p id="built"></p>
   </footer>
 
