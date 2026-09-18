@@ -1,19 +1,19 @@
-/* MJO Track Archive — academic / journal-figure styling.
+/* MJO Track Archive — academic / journal-figure styling. Light palette: Okabe–Ito blue/vermillion on white.
    Serif text, sans figure labels, thin rules instead of app cards. Method colours are data colours. */
 :root {
-  --bg: #fcfcfa;          /* paper */
-  --card: #fcfcfa;        /* figures sit on the paper; used for halos and tooltip text */
-  --panel: #f3f2ee;       /* toolbar, table hover */
-  --ink: #1a1a1a;
-  --muted: #595959;
-  --axis: #3a3a3a;        /* axis lines and ticks */
-  --line: #cfcfca;        /* rules, frames */
-  --grid: #ebebe6;
-  --land: #e2e1dc;
-  --rmm: #c2410c;
-  --lpt: #0369a1;
-  --hl: #6d28d9;
-  --link: #1d4f91;
+  --bg: #ffffff;
+  --card: #ffffff;        /* figures sit on the page; used for halos and tooltip text */
+  --panel: #f3f6f8;       /* toolbar, table hover */
+  --ink: #0f1b24;
+  --muted: #53616c;
+  --axis: #2c3a44;        /* axis lines and ticks */
+  --line: #d3dbe1;        /* rules, frames */
+  --grid: #e9eef1;
+  --land: #e3e9ed;
+  --rmm: #d55e00;
+  --lpt: #0072b2;
+  --hl: #cc79a7;
+  --link: #0b5c8a;
   --radius: 0;
   --serif: "Source Serif 4", "Source Serif Pro", Charter, "Iowan Old Style", Georgia, serif;
   --sans: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", Arial, system-ui, sans-serif;
@@ -43,6 +43,8 @@ body {
   font-optical-sizing: auto;
 }
 a { color: var(--link); text-underline-offset: 2px; text-decoration-thickness: 1px; }
+h1.title { display: flex; align-items: center; gap: 12px; }
+.logo { width: 44px; height: 44px; flex: none; }
 h1 { font-size: 2.3rem; line-height: 1.12; margin: 0 0 6px; font-weight: 600; letter-spacing: -0.01em; }
 h2 { font-size: 1.05rem; margin: 0 0 8px; font-weight: 600; }
 h3 { font-size: 1rem; font-weight: 600; margin: 1.2em 0 0.3em; }
