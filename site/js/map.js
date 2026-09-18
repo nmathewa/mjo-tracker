@@ -2,7 +2,7 @@
 // their real rain-area size, and an optional layer of non-MJO LPT systems for context.
 // The current time is broadcast as a "mjo:time" event so the Hovmöller and phase
 // diagram can show a matching cursor (charts.js).
-import { DAY_MS, fmtDay, phaseLon, PHASE_REGION, parseDay, loadOthers, loadLand50 } from "./data.js";
+import { DAY_MS, fmtDay, phaseLon, PHASE_REGION, parseDay, hashFor, loadOthers, loadLand50 } from "./data.js";
 import { showTip, hideTip, describe } from "./charts.js";
 
 const LAT = 40;          // map shows ±LAT at the widest zoom
@@ -82,10 +82,14 @@ export function drawMap(sel, data, state) {
 
   const radius = (p) => Math.sqrt(p.area / Math.PI) / KM_PER_DEG * pxPerDeg;
 
+  // no tracks here: say why, prominently, and offer windows that have them
   if (!sys.length) {
-    svg.append("text").attr("class", "empty halo").attr("x", W / 2).attr("y", H / 2)
-      .text(data.lpt.some((s) => s.t1 > state.t0) && state.t0 < parseDay("2018-07-01")
-        ? "No MJO rain systems in this window" : "LPT tracks cover Jun 1998 – Jun 2018");
+    const outside = state.t0 >= d3.max(data.lpt, (s) => s.t1) || state.t1 <= d3.min(data.lpt, (s) => s.t0);
+    const link = (from, text) => `<a class="btn" href="${hashFor(parseDay(from), 120, new Set([...state.methods, "lpt"]))}">${text}</a>`;
+    root.append("div").attr("class", "map-empty").html(
+      `<p><b>${outside ? "No LPT tracks for this period." : "No MJO rain systems in this window."}</b> ` +
+      `${outside ? "The LPT database shown here covers Jun 1998 – Jun 2018." : ""}</p>` +
+      `<p>${link("2017-11-01", "Last season: Nov 2017 – Feb 2018")} ${link("2011-10-01", "DYNAMO, Oct 2011")} ${link("2015-11-01", "El Niño winter 2015–16")}</p>`);
   }
 
   // ---- non-MJO systems (lazy)

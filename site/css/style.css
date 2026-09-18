@@ -306,3 +306,16 @@ body { counter-reset: fig; }
 }
 #detail { scroll-margin-top: 64px; }
 @media (max-width: 600px) { #detail { scroll-margin-top: 8px; } }
+
+#map { position: relative; }
+.map-empty {
+  position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); width: min(92%, 520px);
+  background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--lpt);
+  padding: 12px 16px; text-align: center; box-shadow: 0 2px 10px rgb(0 0 0 / 0.08);
+}
+.map-empty p { margin: 4px 0; }
+.map-empty .btn {
+  display: inline-block; margin: 4px 3px 0; padding: 4px 10px; border: 1px solid var(--line); border-radius: 2px;
+  color: var(--link); text-decoration: none; font-size: 0.85rem; background: var(--bg);
+}
+.map-empty .btn:hover { border-color: var(--link); }

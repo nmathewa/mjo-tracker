@@ -28,7 +28,7 @@ Website showing MJO tracks from several tracking methods, growing into live fore
   `https://www.bom.gov.au/clim_data/IDCKGEM000/rmm.74toRealtime.txt`; the old `climate/mjo/graphics/`
   URL is frozen at 2024-02-24. The fetch refuses a file older than the current one).
 - Deploy: `.github/workflows/pages.yml` — daily 06:30 UTC fetch + rebuild + commit + GitHub Pages.
-- Serve: `~/miniforge3/envs/nma/bin/python -m http.server 8765 -d site`.
+- Serve: `~/miniforge3/envs/nma/bin/python pipeline/serve.py` (0.0.0.0:8765, no-cache headers).
 - Browser checks: `@playwright/test` in `node_modules`; run scripts from the repo root.
 
 ## Agents (.claude/agents)
