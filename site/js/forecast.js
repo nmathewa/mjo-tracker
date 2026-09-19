@@ -1,200 +1,144 @@
-// Experimental analog forecast of one MJO LPT system, computed in the browser.
-// For a start time on a system's track, the K most similar starts from OTHER seasons (position,
-// recent motion, rain area, RMM state, time of year) are found, and their next 15 days, moved to
-// the current position, form the ensemble. Same method as the "analogs" baseline in mjopredict.
-import { DAY_MS, fmtDay } from "./data.js";
+// Experimental track forecast (one test event), made in GitHub Actions by the trained rain-track
+// corrector (pipeline/forecast.py) and drawn here as a cone: median track, the distance from it that
+// holds 50 % and 90 % of 50 sampled tracks, the follow-the-GEFS-rain track and what happened.
+import { DAY_MS } from "./data.js";
 import { axisTitle, showTip, hideTip } from "./charts.js";
 
-const K = 50, T = 60, MIN_HIST = 9, MC_LON = 150;   // MIN_HIST: 2-day motion needs 8 steps back
-const libs = {};
-const ui = { id: null, i: null };
-const fmtT = d3.utcFormat("%-d %b %Y %H UTC");
+const EVENT = "LPT-I-2010-70.2000";
+const MARK_DAYS = [1, 3, 5, 7, 10, 15];
+const CONE_STEPS = 40;          // map cone to day 10; beyond that it covers most of the region (panel b has 15 d)
+const ui = { i: 0, fc: null };
+const fmtT = d3.utcFormat("%-d %b %Y");
 const fmtLon = (l) => { l = ((Math.round(l) % 360) + 360) % 360; return l === 0 || l === 180 ? `${l}°` : l < 180 ? `${l}°E` : `${360 - l}°W`; };
-const season = (t) => (t.getUTCMonth() >= 5 ? t.getUTCFullYear() : t.getUTCFullYear() - 1);
 
-function prep(s) {
-  if (s._u) return;
-  let prev;
-  s._u = s.track.map((p) => {
-    let l = p.lon;
-    if (prev !== undefined) { while (l - prev > 180) l -= 360; while (l - prev < -180) l += 360; }
-    return (prev = l);
-  });
-  s._season = season(s.t0);
-}
-
-function rmmContext(days, t) {
-  const k = Math.floor((t - days[0].date) / DAY_MS) - 1;      // day before t: no look-ahead
-  const w = days.slice(Math.max(0, k - 9), k + 1).map((d) => [d.rmm1 ?? 0, d.rmm2 ?? 0]);
-  if (!w.length) return [0, 0, 0, 1, 0, 0];
-  const [r1, r2] = w.at(-1), ang = w.map(([a, b]) => Math.atan2(b, a));
-  let dph = 0;
-  for (let j = 1; j < ang.length; j++) { let d = ang[j] - ang[j - 1]; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; dph += d; }
-  return [r1, r2, Math.hypot(r1, r2), Math.cos(ang.at(-1)), Math.sin(ang.at(-1)), dph / Math.max(1, ang.length - 1)];
-}
-
-function features(s, i, days) {
-  const u = s._u, tr = s.track, t = tr[i].t, rad = (u[i] * Math.PI) / 180;
-  const doy = (2 * Math.PI * ((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / DAY_MS)) / 365.25;
-  return [Math.sin(rad), Math.cos(rad), tr[i].lat / 10, u[i] - u[i - 4], u[i] - u[i - 8], tr[i].lat - tr[i - 8].lat,
-    Math.log(Math.max(tr[i].area / 1e3, 1)), ...rmmContext(days, t), Math.sin(doy), Math.cos(doy)];
-}
-
-function library(data) {
-  const key = data.lptSrc.id;
-  if (libs[key]) return libs[key];
-  const rows = [], feats = [];
-  data.lpt.forEach((s) => {
-    if (!s.track) return;
-    prep(s);
-    for (let i = MIN_HIST - 1; i < s.track.length - 1; i++) { rows.push([s, i]); feats.push(features(s, i, data.days)); }
-  });
-  const F = feats[0].length, mu = new Array(F).fill(0), sd = new Array(F).fill(0);
-  feats.forEach((f) => f.forEach((v, j) => { mu[j] += v / feats.length; }));
-  feats.forEach((f) => f.forEach((v, j) => { sd[j] += (v - mu[j]) ** 2 / feats.length; }));
-  for (let j = 0; j < F; j++) sd[j] = Math.sqrt(sd[j]) + 1e-6;
-  const X = new Float32Array(feats.length * F);
-  feats.forEach((f, r) => f.forEach((v, j) => { X[r * F + j] = (v - mu[j]) / sd[j]; }));
-  return (libs[key] = { rows, X, F, mu, sd });
-}
-
-export function analogForecast(data, s, i) {
-  const lib = library(data), { F, X } = lib;
-  prep(s);
-  const q = features(s, i, data.days).map((v, j) => (v - lib.mu[j]) / lib.sd[j]);
-  const dist = new Float32Array(lib.rows.length);
-  for (let r = 0; r < lib.rows.length; r++) {
-    if (lib.rows[r][0]._season === s._season) { dist[r] = Infinity; continue; }   // other seasons only
-    let d = 0;
-    for (let j = 0; j < F; j++) { const e = X[r * F + j] - q[j]; d += e * e; }
-    dist[r] = d;
+async function load() {
+  if (!ui.fc) {
+    const r = await fetch(`data/forecast/${EVENT}.json`);
+    ui.fc = r.ok ? await r.json() : { starts: [] };
   }
-  const idx = Array.from(dist.keys()).sort((a, b) => dist[a] - dist[b]).slice(0, K);
-  return idx.map((r) => {
-    const [s2, i2] = lib.rows[r], u = s2._u, tr = s2.track;
-    const m = { dx: [0], dy: [0], alive: [true], from: s2, t0: tr[i2].t };
-    for (let k = 1; k <= T; k++) {
-      const j = Math.min(i2 + k, tr.length - 1);
-      m.dx.push(u[j] - u[i2]); m.dy.push(tr[j].lat - tr[i2].lat); m.alive.push(i2 + k < tr.length);
-    }
-    return m;
-  });
+  return ui.fc;
 }
 
-function quantile(a, p) { const s = [...a].sort((x, y) => x - y); const h = (s.length - 1) * p, l = Math.floor(h); return s[l] + (s[Math.min(l + 1, s.length - 1)] - s[l]) * (h - l); }
-
-// ---------------------------------------------------------------------- drawing
-export function drawForecast(sel, data, state) {
+export async function drawForecast(sel, data) {
   const root = d3.select(sel);
+  const fc = await load();
   root.selectAll("*").remove();
-  const inWin = data.lpt.filter((s) => s.track && s.track.length > MIN_HIST && s.t1 > state.t0 && s.t0 < state.t1);
-  if (!state.methods.has("lpt") || !inWin.length) {
-    root.append("p").attr("class", "empty-line").text(state.methods.has("lpt")
-      ? "No MJO LPT systems in this window to forecast. Choose a window with LPT tracks."
-      : "LPT tracking is switched off.");
+  if (!fc.starts.length) {
+    root.append("p").attr("class", "empty-line").text("The forecast has not been built yet (pipeline/forecast.py).");
     return;
   }
-  let s = inWin.find((x) => x.id === ui.id);
-  if (!s) { s = inWin.at(-1); ui.i = null; }
-  if (ui.i == null) {  // default start: where the eastward (MJO) propagation begins
-    const e = s.eprop[0]?.t0;
-    ui.i = e ? d3.bisector((p) => p.t).left(s.track, e) : MIN_HIST - 1;
-  }
-  ui.id = s.id;
-  ui.i = Math.max(MIN_HIST - 1, Math.min(ui.i ?? MIN_HIST - 1, s.track.length - 2));
-  prep(s);
+  const sys = data.lpt.find((s) => s.id === EVENT);
+  const t0s = fc.starts.map((s) => new Date(s.t0));
 
-  // ---- controls
+  root.append("p").attr("class", "fc-intro").html(
+    `Test case: MJO rain system <b>${EVENT.replace("LPT-I-", "")}</b>, ${fmtT(sys ? sys.t0 : t0s[0])} – ` +
+    `${fmtT(sys ? sys.t1 : t0s.at(-1))}, which crossed the Maritime Continent in late December 2011. ` +
+    `The model never saw this winter. <a href="#from=2011-12-10&days=80&m=rmm,lpt&src=imerg&sel=${EVENT}">Show it in the figures above →</a>`);
+
   const bar = root.append("div").attr("class", "fc-bar");
-  const pick = bar.append("label").attr("class", "fc-pick").text("System ");
-  const selEl = pick.append("select").attr("id", "fc-system");
-  selEl.selectAll("option").data(inWin).join("option").attr("value", (x) => x.id)
-    .property("selected", (x) => x.id === s.id)
-    .text((x) => `LPT ${x.lpt_index} · ${fmtDay(x.t0)} – ${fmtDay(x.t1)}`);
-  selEl.on("change", (ev) => { ui.id = ev.target.value; ui.i = null; drawForecast(sel, data, state); });
   const st = bar.append("div").attr("class", "fc-start");
-  const back = st.append("button").attr("type", "button").attr("aria-label", "One day earlier").text("◀");
-  const slider = st.append("input").attr("type", "range").attr("id", "fc-start")
-    .attr("min", MIN_HIST - 1).attr("max", s.track.length - 2).attr("step", 1).property("value", ui.i)
-    .attr("aria-label", "Forecast start time");
-  const fwd = st.append("button").attr("type", "button").attr("aria-label", "One day later").text("▶");
+  const back = st.append("button").attr("type", "button").attr("aria-label", "Earlier start").text("◀");
+  const slider = st.append("input").attr("type", "range").attr("id", "fc-start").attr("min", 0)
+    .attr("max", fc.starts.length - 1).attr("step", 1).property("value", ui.i).attr("aria-label", "Forecast start");
+  const fwd = st.append("button").attr("type", "button").attr("aria-label", "Later start").text("▶");
   const lab = st.append("output").attr("class", "fc-when");
-  const step = (d) => { ui.i = Math.max(MIN_HIST - 1, Math.min(s.track.length - 2, ui.i + d)); slider.property("value", ui.i); update(); };
-  back.on("click", () => step(-4));
-  fwd.on("click", () => step(4));
-  slider.on("input", (ev) => { ui.i = +ev.target.value; update(); });
+  const go = (i) => { ui.i = Math.max(0, Math.min(fc.starts.length - 1, i)); slider.property("value", ui.i); update(); };
+  back.on("click", () => go(ui.i - 1));
+  fwd.on("click", () => go(ui.i + 1));
+  slider.on("input", (ev) => go(+ev.target.value));
 
   const grid = root.append("div").attr("class", "fc-grid");
   const mapBox = grid.append("div").attr("class", "fc-panel");
-  mapBox.append("h3").html('<span class="panel-letter">(a)</span> Ensemble tracks');
+  mapBox.append("h3").html('<span class="panel-letter">(a)</span> Forecast cone');
   const mapDiv = mapBox.append("div");
   const fanBox = grid.append("div").attr("class", "fc-panel");
-  fanBox.append("h3").html('<span class="panel-letter">(b)</span> Eastward displacement');
+  fanBox.append("h3").html('<span class="panel-letter">(b)</span> Eastward move by lead time');
   const fanDiv = fanBox.append("div");
+  root.append("div").attr("class", "legend fc-legend").html(
+    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><rect x="1" y="2" width="26" height="10" class="fc-c90"/></svg>90 % of forecast tracks (map: to day 10)</span>' +
+    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><rect x="1" y="2" width="26" height="10" class="fc-c50"/></svg>50 %</span>' +
+    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line x1="2" y1="7" x2="26" y2="7" class="fc-med"/></svg>median forecast (day marks)</span>' +
+    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line x1="2" y1="7" x2="26" y2="7" class="fc-rain"/></svg>follow the GEFS rain (no model)</span>' +
+    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line x1="2" y1="7" x2="26" y2="7" class="fc-obs"/></svg>what happened</span>');
   const stats = root.append("dl").attr("class", "fc-stats");
   root.append("p").attr("class", "caption").html(
-    `<b>Experimental.</b> Analog forecast for MJO LPT system ${s.lpt_index} (${data.lptSrc.label}): from the chosen start, the ${K} most similar ` +
-    `starts in <em>other</em> seasons — matched on position, 1- and 2-day motion, rain area, RMM state (day before) and time of year — ` +
-    `and their next 15 days, moved to today's position. (a) Blue lines: ensemble members (several can come from one past system, so they look alike); ` +
-    `black: the observed track (thick before the start, dashed after). (b) Eastward displacement from the start: 10–90 % and ` +
-    `25–75 % ranges, the median (dashed) and what happened (dotted). Cross-validated over 1998–2022 this method's 5-day zonal error is about 13° ` +
-    `(persistence 13.5°) and 19° at 10 days (persistence 20.5°), and it does not forecast Maritime Continent crossing better than ` +
-    `chance — read the plume as a range of past behaviour, not an operational forecast. LPT data run to ${d3.utcFormat("%-d %b %Y")(d3.max(data.lpt, (x) => x.t1))}.`);
+    `<b>Experimental.</b> A trained rain-track corrector (CNN-Transformer, v${fc.model.version}) run in GitHub Actions: ` +
+    `for each start, the GEFS v12 reforecast (${fc.starts[0].members} members) is followed from the system's position ` +
+    `(“follow the GEFS rain”), and the model — which sees the GEFS fields in a window moving with the system, the ` +
+    `system's last 5 days and the RMM state — predicts how the real track departs from that, as 50 sampled tracks. ` +
+    `(a) Shaded: the distance from the median that holds 50 % and 90 % of the tracks at each lead; (b) the same as ` +
+    `eastward move, with the 150°E line (crossing the Maritime Continent). On this event (65 daily starts) the model is ` +
+    `the best probabilistic forecast to about 7 days — 12–14 % lower CRPS than following the GEFS rain, and about 85 % ` +
+    `of outcomes inside its 90 % range against about 35 % for the raw members — but it over-corrects after day 7. ` +
+    `One event is not proof of skill. Trained on ${fc.model.trained_on}; held out: ${fc.model.held_out}.`);
 
   function update() {
-    const i = ui.i, tr = s.track, u = s._u, t0 = tr[i].t;
-    lab.text(`start ${fmtT(t0)} · day ${((t0 - s.t0) / DAY_MS).toFixed(1)} of ${Math.round(s.duration_days)}`);
-    const mem = analogForecast(data, s, i);
-    const obs = d3.range(0, Math.min(T, tr.length - 1 - i) + 1).map((k) => ({ k, dx: u[i + k] - u[i], dy: tr[i + k].lat - tr[i].lat }));
-    drawMap(mapDiv, data, s, i, mem, obs);
-    drawFan(fanDiv, mem, obs, u[i]);
-    // stats
-    const lon0 = ((u[i] % 360) + 360) % 360;
-    const pAlive = (k) => d3.mean(mem, (m) => m.alive[k]);
-    const med = (k) => quantile(mem.map((m) => m.dx[k]), 0.5);
+    const s = fc.starts[ui.i], t0 = new Date(s.t0);
+    lab.text(`start ${fmtT(t0)} 00 UTC · ${s.lon0.toFixed(0)}°E`);
+    drawMap(mapDiv, data, sys, s, t0);
+    drawFan(fanDiv, s);
+    const move = (k) => s.median[k][0];
+    const obs = (k) => (s.observed[k] ? s.observed[k][0] : null);
     const rows = [
-      ["Median eastward move, 5 d / 10 d", `${med(20).toFixed(0)}° / ${med(40).toFixed(0)}°`],
-      ["Still alive at 5 / 10 / 15 d", `${Math.round(100 * pAlive(20))} % / ${Math.round(100 * pAlive(40))} % / ${Math.round(100 * pAlive(60))} %`],
+      ["Median eastward move, 5 d / 10 d", `${move(19).toFixed(0)}° / ${move(39).toFixed(0)}°`],
+      ["Observed, 5 d / 10 d", [19, 39].map((k) => (obs(k) === null ? "—" : `${obs(k).toFixed(0)}°`)).join(" / ")],
+      ["Still alive at 5 / 10 / 15 d", [19, 39, 59].map((k) => `${Math.round(100 * s.p_alive[k])} %`).join(" / ")],
     ];
-    if (lon0 < MC_LON && lon0 > 40) {
-      const p = d3.mean(mem, (m) => m.dx.some((d, k) => m.alive[k] && d >= MC_LON - lon0));
-      const o = obs.some((o) => lon0 + o.dx >= MC_LON);
-      rows.push([`Reaches ${MC_LON}°E within 15 d`, `${Math.round(100 * p)} % of members` + (obs.length > 1 ? ` · observed: ${o ? "yes" : "no"}` : "")]);
+    if (s.p_reach_150E !== null) {
+      const reached = s.observed.some((o) => s.lon0 + o[0] >= 150);
+      rows.push(["Reaches 150°E within 15 d", `${Math.round(100 * s.p_reach_150E)} % of tracks · observed: ${reached ? "yes" : "no"}`]);
     }
-    rows.push(["Observed after the start", obs.length > 1 ? `${((obs.length - 1) / 4).toFixed(1)} days of track` : "none (end of data or of the system)"]);
     stats.selectAll("div").data(rows).join("div").html(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`);
   }
   update();
 }
 
-function drawMap(div, data, s, i, mem, obs) {
+function unwrap(lon, ref) { let l = lon; while (l - ref > 180) l -= 360; while (l - ref < -180) l += 360; return l; }
+
+function drawMap(div, data, sys, s, t0) {
   div.selectAll("*").remove();
-  const u = s._u, tr = s.track, lon0 = u[i], lat0 = tr[i].lat;
+  const lon0 = s.lon0, lat0 = s.lat0;
+  const hist = sys ? sys.track.filter((p) => p.t <= t0 && p.t >= new Date(+t0 - 5 * DAY_MS)) : [];
+  const pts = [...s.median.map((m, k) => [lon0 + m[0], lat0 + m[1], k < CONE_STEPS ? s.r90_km[k] / 111.2 : 0]),
+    ...s.observed.map((o) => [lon0 + o[0], lat0 + o[1], 0]), ...hist.map((p) => [unwrap(p.lon, lon0), p.lat, 0])];
   const W = Math.max(300, div.node().clientWidth || 600);
-  const h0 = Math.max(0, i - 20);
-  const lons = [...mem.flatMap((m) => m.dx.map((d) => lon0 + d)), ...u.slice(h0, i + T + 1)];
-  const lats = [...mem.flatMap((m) => m.dy.map((d) => lat0 + d)), ...tr.slice(h0, i + T + 1).map((p) => p.lat)];
-  let a = d3.min(lons) - 6, b = d3.max(lons) + 6, c = Math.max(-40, d3.min(lats) - 6), d = Math.min(40, d3.max(lats) + 6);
-  if (b - a < 60) { const m = (a + b) / 2; a = m - 30; b = m + 30; }
-  const H = Math.round(Math.min(W * 0.62, Math.max(220, W * (d - c) / (b - a))));
+  let a = d3.min(pts, (p) => p[0] - p[2]) - 6, b = d3.max(pts, (p) => p[0] + p[2]) + 6;
+  const c = Math.max(-40, d3.min(pts, (p) => p[1] - p[2]) - 6), d = Math.min(40, d3.max(pts, (p) => p[1] + p[2]) + 6);
+  if (b - a < 60) { const mid = (a + b) / 2; a = mid - 30; b = mid + 30; }
+  const H = Math.round(Math.min(W * 0.62, Math.max(230, W * (d - c) / (b - a))));
   const ppd = Math.min(W / (b - a), H / (d - c)), cx = (a + b) / 2, cy = (c + d) / 2;
   const proj = d3.geoEquirectangular().rotate([-cx, 0]).center([0, cy]).scale(ppd * 180 / Math.PI).translate([W / 2, H / 2]);
-  const xy = (lon, lat) => proj([lon, lat]);
+  const xy = (lo, la) => proj([lo, la]);
   const svg = div.append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img")
-    .attr("aria-label", `Ensemble of ${mem.length} analog tracks from ${fmtLon(lon0)}`);
+    .attr("aria-label", `Forecast cone from ${fmtLon(lon0)} on ${fmtT(t0)}`);
   svg.append("clipPath").attr("id", "fc-clip").append("rect").attr("width", W).attr("height", H);
   const g = svg.append("g").attr("clip-path", "url(#fc-clip)");
   g.append("rect").attr("class", "ocean").attr("width", W).attr("height", H);
   g.append("path").attr("class", "gridline").attr("fill", "none").attr("d", d3.geoPath(proj)(d3.geoGraticule().step([15, 15])()));
   g.append("path").attr("class", "land").attr("d", d3.geoPath(proj)(topojson.feature(data.land, data.land.objects.land)));
+  // cone: union of ellipses (km radius, wider in longitude by 1/cos lat), in one path so the fill is even
+  const cone = (radii) => s.median.slice(0, CONE_STEPS).map((m, k) => {
+    const [x, y] = xy(lon0 + m[0], lat0 + m[1]);
+    const ry = radii[k] / 111.2 * ppd, rx = ry / Math.cos((lat0 + m[1]) * Math.PI / 180);
+    return `M${x - rx},${y}a${rx},${ry} 0 1,0 ${2 * rx},0a${rx},${ry} 0 1,0 ${-2 * rx},0`;
+  }).join("");
+  g.append("path").attr("class", "fc-c90").attr("d", cone(s.r90_km));
+  g.append("path").attr("class", "fc-c50").attr("d", cone(s.r50_km));
   const line = d3.line();
-  g.append("g").selectAll("path").data(mem).join("path").attr("class", "fc-member")
-    .attr("d", (m) => line(m.dx.map((dx, k) => xy(lon0 + dx, lat0 + m.dy[k]))))
-    .on("mousemove", (ev, m) => showTip(ev, `<b>Analog</b>: LPT ${m.from.lpt_index}<br>from ${fmtT(m.t0)}`))
-    .on("mouseleave", hideTip);
-  g.append("path").attr("class", "fc-hist").attr("d", line(d3.range(h0, i + 1).map((j) => xy(u[j], tr[j].lat))));
-  if (obs.length > 1) g.append("path").attr("class", "fc-obs").attr("d", line(obs.map((o) => xy(lon0 + o.dx, lat0 + o.dy))));
-  g.append("circle").attr("class", "fc-dot").attr("r", 5).attr("cx", xy(lon0, lat0)[0]).attr("cy", xy(lon0, lat0)[1]);
+  g.append("path").attr("class", "fc-rain").attr("d", line([[0, 0], ...s.rain].map((r) => xy(lon0 + r[0], lat0 + r[1]))));
+  if (hist.length > 1) g.append("path").attr("class", "fc-hist").attr("d", line(hist.map((p) => xy(unwrap(p.lon, lon0), p.lat))));
+  if (s.observed.length) g.append("path").attr("class", "fc-obs").attr("d", line([[0, 0], ...s.observed].map((o) => xy(lon0 + o[0], lat0 + o[1]))));
+  g.append("path").attr("class", "fc-med").attr("d", line([[0, 0], ...s.median].map((m) => xy(lon0 + m[0], lat0 + m[1]))));
+  for (const day of MARK_DAYS) {
+    const m = s.median[day * 4 - 1], [x, y] = xy(lon0 + m[0], lat0 + m[1]);
+    g.append("circle").attr("class", "fc-daydot").attr("cx", x).attr("cy", y).attr("r", 3.5)
+      .on("mousemove", (ev) => showTip(ev, `<b>Day ${day}</b><br>median ${fmtLon(lon0 + m[0])}, ${(lat0 + m[1]).toFixed(1)}°<br>` +
+        `50 % within ${Math.round(s.r50_km[day * 4 - 1])} km · 90 % within ${Math.round(s.r90_km[day * 4 - 1])} km`))
+      .on("mouseleave", hideTip);
+    g.append("text").attr("class", "halo fc-daylab").attr("x", x + 5).attr("y", y - 5).text(`${day}d`);
+  }
+  const [sx, sy] = xy(lon0, lat0);
+  g.append("circle").attr("class", "fc-dot").attr("r", 5).attr("cx", sx).attr("cy", sy);
   const ax = svg.append("g").attr("class", "map-axis");
   for (let l = Math.ceil(a / 15) * 15; l < b; l += 15) {
     const x = xy(l, cy)[0];
@@ -203,44 +147,40 @@ function drawMap(div, data, s, i, mem, obs) {
   svg.append("rect").attr("class", "frame").attr("width", W).attr("height", H);
 }
 
-function drawFan(div, mem, obs, lonStart) {
+function drawFan(div, s) {
   div.selectAll("*").remove();
-  const W = Math.max(280, div.node().clientWidth || 420), H = Math.round(Math.min(360, Math.max(240, W * 0.7)));
-  const m = { t: 10, r: 14, b: 40, l: 54 };
-  const q = (p) => d3.range(0, T + 1).map((k) => quantile(mem.map((mm) => mm.dx[k]), p));
-  const [q10, q25, q50, q75, q90] = [0.1, 0.25, 0.5, 0.75, 0.9].map(q);
-  const ys = [...q10, ...q90, ...obs.map((o) => o.dx), 0];
-  const x = d3.scaleLinear().domain([0, T / 4]).range([m.l, W - m.r]);
-  const y = d3.scaleLinear().domain(d3.extent(ys)).nice().range([H - m.b, m.t]);
-  const svg = div.append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img").attr("aria-label", "Eastward displacement by lead time");
+  const W = Math.max(280, div.node().clientWidth || 420), H = Math.round(Math.min(360, Math.max(240, W * 0.72)));
+  const m = { t: 10, r: 14, b: 40, l: 56 }, n = s.median.length;
+  const [q10, q25, q50, q75, q90] = s.lon_q;
+  const obs = s.observed.map((o) => o[0]);
+  const x = d3.scaleLinear().domain([0, n / 4]).range([m.l, W - m.r]);
+  const y = d3.scaleLinear().domain(d3.extent([0, ...q10, ...q90, ...obs, ...s.rain.map((r) => r[0])])).nice().range([H - m.b, m.t]);
+  const svg = div.append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img").attr("aria-label", "Eastward move by lead time");
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(6).tickSizeOuter(0));
   svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(6).tickSizeOuter(0).tickFormat((v) => `${v}°`));
   axisTitle(svg, (m.l + W - m.r) / 2, H - 6, "Lead (days)");
   axisTitle(svg, 12, (m.t + H - m.b) / 2, "Eastward move (° lon)", -90);
   svg.append("line").attr("class", "zero").attr("x1", m.l).attr("x2", W - m.r).attr("y1", y(0)).attr("y2", y(0));
-  const lon0 = ((lonStart % 360) + 360) % 360;
-  if (lon0 < MC_LON && lon0 > 40 && y.domain()[1] >= MC_LON - lon0) {
-    const yy = y(MC_LON - lon0);
+  if (s.lon0 < 150 && y.domain()[1] >= 150 - s.lon0) {
+    const yy = y(150 - s.lon0);
     svg.append("line").attr("class", "fc-ref").attr("x1", m.l).attr("x2", W - m.r).attr("y1", yy).attr("y2", yy);
-    svg.append("text").attr("class", "halo").attr("x", W - m.r - 4).attr("y", yy - 4).attr("text-anchor", "end").text(`${MC_LON}°E`);
+    svg.append("text").attr("class", "halo").attr("x", W - m.r - 4).attr("y", yy - 4).attr("text-anchor", "end").text("150°E");
   }
-  const area = (lo, hi) => d3.area().x((_, k) => x(k / 4)).y0((_, k) => y(lo[k])).y1((_, k) => y(hi[k]))(lo);
+  const lead = (k) => x((k + 1) / 4);
+  const area = (lo, hi) => d3.area().x((_, k) => lead(k)).y0((_, k) => y(lo[k])).y1((_, k) => y(hi[k]))(lo);
   svg.append("path").attr("class", "fc-band90").attr("d", area(q10, q90));
   svg.append("path").attr("class", "fc-band50").attr("d", area(q25, q75));
-  svg.append("path").attr("class", "fc-median").attr("d", d3.line().x((_, k) => x(k / 4)).y((v) => y(v))(q50));
-  if (obs.length > 1) svg.append("path").attr("class", "fc-obs").attr("d", d3.line().x((o) => x(o.k / 4)).y((o) => y(o.dx))(obs));
-  // hover: values at the nearest lead
+  svg.append("path").attr("class", "fc-rain").attr("d", d3.line().x((_, k) => lead(k)).y((r) => y(r[0]))(s.rain));
+  svg.append("path").attr("class", "fc-med").attr("d", d3.line().x((_, k) => lead(k)).y((v) => y(v))(q50));
+  if (obs.length) svg.append("path").attr("class", "fc-obs").attr("d", d3.line().x((_, k) => lead(k)).y((v) => y(v))(obs));
   const rule = svg.append("line").attr("class", "hover-rule").attr("y1", m.t).attr("y2", H - m.b).style("display", "none");
   svg.append("rect").attr("x", m.l).attr("y", m.t).attr("width", W - m.l - m.r).attr("height", H - m.t - m.b).attr("fill", "transparent")
     .on("mousemove click", (ev) => {
-      const k = Math.max(0, Math.min(T, Math.round(x.invert(d3.pointer(ev)[0]) * 4)));
-      rule.style("display", null).attr("x1", x(k / 4)).attr("x2", x(k / 4));
-      const o = obs.find((oo) => oo.k === k);
-      showTip(ev, `<b>+${(k / 4).toFixed(2)} d</b><br>median ${q50[k].toFixed(1)}°<br>25–75 %: ${q25[k].toFixed(0)}° to ${q75[k].toFixed(0)}°<br>10–90 %: ${q10[k].toFixed(0)}° to ${q90[k].toFixed(0)}°` +
-        (o ? `<br>observed ${o.dx.toFixed(1)}°` : ""));
+      const k = Math.max(0, Math.min(n - 1, Math.round(x.invert(d3.pointer(ev)[0]) * 4) - 1));
+      rule.style("display", null).attr("x1", lead(k)).attr("x2", lead(k));
+      showTip(ev, `<b>+${((k + 1) / 4).toFixed(2)} d</b><br>median ${q50[k].toFixed(1)}°<br>50 %: ${q25[k].toFixed(0)}° to ${q75[k].toFixed(0)}°<br>` +
+        `90 %: ${q10[k].toFixed(0)}° to ${q90[k].toFixed(0)}°<br>rain track ${s.rain[k][0].toFixed(1)}°` +
+        (obs[k] !== undefined ? `<br>observed ${obs[k].toFixed(1)}°` : ""));
     })
     .on("mouseleave", () => { rule.style("display", "none"); hideTip(); });
 }
-
-// a system chosen elsewhere (map, Hovmöller, events table) becomes the forecast's system
-export function selectForecastSystem(id) { if (id) { ui.id = id; ui.i = null; } }

@@ -1,5 +1,6 @@
 # Daily: rebuild site/data from the original sources (BoM RMM, UW LPT) and deploy site/ to Pages.
-# No data is committed: downloads and LPT outlines live in the Actions cache between runs.
+# No data is committed: downloads, LPT outlines and GEFS fields live in the Actions cache between runs.
+# The experimental forecast model is downloaded from a GitHub Release (model-v0.1).
 name: Update data and deploy
 
 on:
@@ -34,6 +35,7 @@ jobs:
         with:
           path: |
             data/raw
+            data/gefs
             site/data/outlines
           key: data-${{ github.run_id }}
           restore-keys: data-
@@ -41,6 +43,13 @@ jobs:
         run: python pipeline/build.py --fetch
       - name: Real LPT outlines (only systems not already cached)
         run: python pipeline/outlines.py --workers 4
+      - name: Experimental track forecast for one event (model from the model-v0.1 release)
+        run: |
+          mkdir -p models
+          for f in corrector.onnx norm.npz meta.json; do
+            curl -sfL -o models/$f https://github.com/nmathewa/mjo-tracker/releases/download/model-v0.1/$f
+          done
+          python pipeline/forecast.py --model models
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

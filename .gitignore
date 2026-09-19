@@ -7,3 +7,4 @@ test-results/
 # no datasets in git: rebuilt from the original sources (pipeline/build.py)
 data/raw/
 site/data/
+models/

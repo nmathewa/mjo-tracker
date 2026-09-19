@@ -366,3 +366,16 @@ body { counter-reset: fig; }
 .fc-stats div { padding: 8px 0; border-bottom: 1px solid var(--grid); }
 .fc-stats dt { color: var(--muted); font-size: 0.78rem; }
 .fc-stats dd { margin: 2px 0 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* ---- forecast cone */
+.fc-intro { font-size: 0.95rem; max-width: 90ch; margin: 2px 0 10px; }
+.fc-c90 { fill: var(--lpt); fill-opacity: 0.16; stroke: none; }
+.fc-c50 { fill: var(--lpt); fill-opacity: 0.3; stroke: none; }
+.fc-med { fill: none; stroke: var(--lpt); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.fc-rain { fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 6 4; }
+.fc-obs { fill: none; stroke: var(--ink); stroke-width: 2; stroke-dasharray: 2 3; }
+.fc-hist { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+.fc-daydot { fill: var(--bg); stroke: var(--lpt); stroke-width: 2; }
+.fc-daylab { font-size: 10.5px; fill: var(--ink); }
+.fc-legend { margin-top: 10px; }
+.fc-legend .fc-c90, .fc-legend .fc-c50 { stroke: none; }

@@ -5,7 +5,7 @@ import { nowSentence } from "./now.js";
 import { drawTimeline, drawHovmoller, drawPhase, drawList, hideTip } from "./charts.js";
 import { drawMap } from "./map.js";
 import { drawDetail } from "./detail.js";
-import { drawForecast, selectForecastSystem } from "./forecast.js";
+import { drawForecast } from "./forecast.js";
 
 const MIN_DAYS = 30, MAX_DAYS = 365, DEFAULT_DAYS = 120;
 const hashParam = (k) => new URLSearchParams(location.hash.slice(1)).get(k);
@@ -68,7 +68,7 @@ function render(push = false) {
   drawList("#events", data, state, pickEvent);
   fitHovmoller();
   renderDetail();
-  if (!document.getElementById("forecast-section").hidden) drawForecast("#forecast", data, state);
+  drawForecast("#forecast", data);
   const label = fmtRange(state.t0, addDays(state.t1, -1));
   document.getElementById("window-label").value = label;
   document.getElementById("timeline").setAttribute("aria-valuetext", label);
@@ -120,11 +120,7 @@ function select(id, scroll = true) {
   renderDetail();
   if (selected && scroll) document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "start" });
 }
-document.addEventListener("mjo:select", (ev) => {
-  selectForecastSystem(ev.detail);
-  select(ev.detail);
-  if (!document.getElementById("forecast-section").hidden) drawForecast("#forecast", data, state);
-});
+document.addEventListener("mjo:select", (ev) => select(ev.detail));
 
 function pickEvent(ev) {
   const len = Math.max(MIN_DAYS, Math.round((ev.t1 - ev.t0) / DAY_MS) + 20);

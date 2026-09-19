@@ -5,3 +5,7 @@ aiohttp
 h5py
 contourpy
 shapely
+onnxruntime
+eccodes
+eccodeslib
+requests
