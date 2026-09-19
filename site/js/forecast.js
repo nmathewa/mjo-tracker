@@ -67,10 +67,13 @@ export async function drawForecast(sel, data) {
     `(“follow the GEFS rain”), and the model — which sees the GEFS fields in a window moving with the system, the ` +
     `system's last 5 days and the RMM state — predicts how the real track departs from that, as 50 sampled tracks. ` +
     `(a) Shaded: the distance from the median that holds 50 % and 90 % of the tracks at each lead; (b) the same as ` +
-    `eastward move, with the 150°E line (crossing the Maritime Continent). On this event (65 daily starts) the model is ` +
-    `the best probabilistic forecast to about 7 days — 12–14 % lower CRPS than following the GEFS rain, and about 85 % ` +
-    `of outcomes inside its 90 % range against about 35 % for the raw members — but it over-corrects after day 7. ` +
-    `One event is not proof of skill. Trained on ${fc.model.trained_on}; held out: ${fc.model.held_out}.`);
+    `eastward move, with the 150°E line (crossing the Maritime Continent). Measured skill, retraining with each of 21 ` +
+    `DJF winters of the GEFS reforecast held out in turn (1,073 starts): the model is the best of the methods tried ` +
+    `from day 3 to day 15, with 18–41 % lower CRPS than following the GEFS rain (90 % intervals over systems exclude ` +
+    `zero), and the only one with skill at saying whether a system crosses the Maritime Continent (Brier skill +0.13; ` +
+    `the others are negative). At day 1 it is worse than persistence or analogs. Its settings were chosen while ` +
+    `looking at this winter, so a clean test on later, operational GEFS winters is still to do. This page shows one ` +
+    `test event. Trained on ${fc.model.trained_on}; held out: ${fc.model.held_out}.`);
 
   function update() {
     const s = fc.starts[ui.i], t0 = new Date(s.t0);
