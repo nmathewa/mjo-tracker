@@ -227,13 +227,13 @@ function writeAbout() {
     ${coverageText(x)}; ${x.n_systems} MJO systems and ${x.n_other} other systems lasting ≥ 3 days${x.outlines ? "; real rain-area outlines from the per-system mask files" : ""}.</li>`).join("");
   document.getElementById("about").innerHTML = `
   <h3>RMM index</h3>
-  <p>The ${rmmM.long_name.replace("(Wheeler & Hendon 2004)", `(${cite("wh04", "Wheeler &amp; Hendon 2004")})`)} is used daily
+  <p>The ${rmmM.long_name.replace("(Wheeler & Hendon 2004)", `(${cite("wheeler2004", "Wheeler &amp; Hendon 2004")})`)} is used daily
     from ${rmmM.coverage.join(" to ")}, as published by the <a href="${rmmM.source}">Australian Bureau of Meteorology</a>.
     An <em>RMM event</em> here is a spell with amplitude ≥ ${r.min_amp} (dips of ≤ ${r.gap_days} days allowed) that lasts
     at least ${r.min_days} days and advances at least ${r.min_east_deg}° eastward around the phase diagram; the record
     contains ${rmmM.n_events} such events.</p>
   <h3>Large-scale Precipitation Tracking</h3>
-  <p>${lptM.long_name.replace("(Kerns & Chen 2016, 2020)", `(${cite("kc16", "Kerns &amp; Chen 2016")}, ${cite("kc20", "2020")})`)}
+  <p>${lptM.long_name.replace("(Kerns & Chen 2016, 2020)", `(${cite("kerns2016", "Kerns &amp; Chen 2016")}, ${cite("kerns2020", "2020")})`)}
     follows contiguous areas of heavy time-averaged rain. Two databases are available (switch with the selector next to the
     LPT button); both come from <a href="${src.source_url}">LPT data access (Kerns, University of Washington)</a>:</p>
   <ul>${srcRows}</ul>
@@ -243,7 +243,7 @@ function writeAbout() {
   <h3>Caveats</h3>
   <ul class="caveats">
     <li><b>Approximate RMM longitude.</b> RMM is an index, not a location. On the Hovmöller diagram and map its days are
-      placed at the longitude where each phase's rain usually sits (${cite("wh04", "Wheeler &amp; Hendon 2004")} composites),
+      placed at the longitude where each phase's rain usually sits (${cite("wheeler2004", "Wheeler &amp; Hendon 2004")} composites),
       so read the RMM marks as approximate.</li>
     <li><b>LPT coverage.</b> The ${src.label} tracks shown cover ${coverageText(src)} only; windows outside that period show RMM alone.</li>
     <li><b>Rain areas.</b> ${src.outlines ? "Outlines in the system detail figure are the real mask edges, every 6 h; the map's moving discs are circles of equal area." : "Rain areas are drawn as circles of equal area, not the systems' real shapes (real outlines are available for IMERG V7)."}</li>
@@ -257,22 +257,8 @@ document.getElementById("cite-date").textContent = d3.utcFormat("%-d %B %Y")(new
 document.getElementById("now").innerHTML = nowSentence(data.days);
 document.getElementById("built").textContent = `Data built ${data.manifest.built}.`;
 
-// colour theme: auto (system) → light → dark; charts redraw because some colours are computed
-const themeBtn = document.getElementById("theme");
-const THEMES = { auto: "◐ Auto", light: "☀ Light", dark: "☾ Dark" };
-function setTheme(t, save = true) {
-  if (t === "auto") delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = t;
-  themeBtn.textContent = THEMES[t];
-  themeBtn.setAttribute("aria-label", `Colour theme: ${t}. Click to change.`);
-  if (save) try { localStorage.setItem("theme", t); } catch {}
-}
-setTheme(document.documentElement.dataset.theme ?? "auto", false);
-themeBtn.addEventListener("click", () => {
-  const order = ["auto", "light", "dark"];
-  setTheme(order[(order.indexOf(document.documentElement.dataset.theme ?? "auto") + 1) % 3]);
-  render();
-});
+// colour theme: the template's theme.js has the toggle; charts redraw because some colours are computed
+document.addEventListener("themechange", () => render());
 
 // charts are sized to their containers, so redraw when the width changes
 let lastW = innerWidth, resizeTimer;

@@ -1,6 +1,8 @@
 # Daily: rebuild site/data from the original sources (BoM RMM, UW LPT) and deploy site/ to Pages.
 # No data is committed: downloads, LPT outlines and GEFS fields live in the Actions cache between runs.
 # The experimental forecast model is downloaded from a GitHub Release (model-v0.1).
+# The page is built with pandoc from content/index.md and the academic-site-template (submodule theme/),
+# taken at its latest main on every run, so template changes reach the site on the next build.
 name: Update data and deploy
 
 on:
@@ -26,6 +28,13 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Latest academic-site-template and pandoc
+        run: |
+          git submodule update --remote theme
+          curl -sfL -o pandoc.deb https://github.com/jgm/pandoc/releases/download/3.11/pandoc-3.11-1-amd64.deb
+          sudo dpkg -i pandoc.deb && rm pandoc.deb
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -50,6 +59,8 @@ jobs:
             curl -sfL -o models/$f https://github.com/nmathewa/mjo-tracker/releases/download/model-v0.1/$f
           done
           python pipeline/forecast.py --model models
+      - name: Build the page from Markdown (content/) with the template
+        run: make
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

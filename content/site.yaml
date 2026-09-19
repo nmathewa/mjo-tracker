@@ -1,0 +1,15 @@
+# Page settings for the MJO Track Archive; the layout and base style come from the
+# academic-site-template (theme/). Front matter in index.md overrides these.
+author:
+  - Nirmal Mathew Alex
+affiliation: Florida Institute of Technology
+logo: img/logo-phase.svg
+favicon: img/logo-phase.svg
+root: ""
+main-class: page
+css: [css/style.css]
+scripts: [vendor/d3.min.js, vendor/topojson-client.min.js]
+modules: [js/main.js]
+csl: content/ams.csl
+link-citations: true
+footer: 'Nirmal Mathew Alex · Florida Institute of Technology · <span id="built"></span>'

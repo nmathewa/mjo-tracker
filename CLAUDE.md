@@ -30,13 +30,21 @@ The ML/science lives in `~/mjo_predict` (private repo `nmathewa/mjo-predict`), n
   rain-track corrector → cone summary → `site/data/forecast/<event>.json`. Self-contained copy of the
   mjopredict inputs; verified identical to training. Needs `models/{corrector.onnx,norm.npz,meta.json}`.
 - `pipeline/serve.py` — local no-cache server, 0.0.0.0:8765.
-- `site/` — static, no build step. `js/main.js` (state in URL hash `#from=&days=&m=&src=&sel=`),
+- **Page = Markdown + template.** `content/index.md` (text; figures as ```` ```{=html} ```` blocks),
+  `content/site.yaml`, `content/references.bib` + `ams.csl` → `make` (pandoc 3.11, `~/.local/bin/pandoc`)
+  → `site/index.html` + `site/assets/` (both generated, gitignored). Layout, base CSS, theme toggle
+  (`themechange` event → charts redraw) come from the academic-site-template, git submodule `theme/`;
+  CI runs `git submodule update --remote theme`, so template `main` goes live on the next build.
+  `make THEME=~/academic-site-template` builds against the local checkout. Edit text in
+  `content/index.md`, never in `site/index.html`.
+- `site/` — static; `js/main.js` (state in URL hash `#from=&days=&m=&src=&sel=`),
   `js/charts.js` (timeline, Hovmöller, phase diagram, list), `js/map.js` (pan/zoom/playback;
   events `mjo:time`, `mjo:select`), `js/detail.js` (one system, after Kerns & Chen 2020 Fig. 1),
   `js/forecast.js` (forecast cone), `js/now.js` (current-state line). D3/topojson/land in `site/vendor/`.
 - Style: academic (Source Serif 4 + Source Sans 3), Okabe–Ito blue `--lpt` / vermillion `--rmm` on
   white; dark mode kept; theme toggle; phase-diagram logo `site/img/logo-phase.svg`.
-- `.github/workflows/pages.yml` — daily 06:30 UTC: build data, outlines, forecast, deploy Pages.
+- `.github/workflows/pages.yml` — daily 06:30 UTC: latest template + pandoc, build data, outlines,
+  forecast, `make`, deploy Pages.
   Public repo → Actions minutes free. Keepalive action (no commits).
 - `.claude/agents/` — `ui-designer`, `ux-engineer` (editing), `communicator` (read-only ideas).
 
@@ -45,6 +53,7 @@ The ML/science lives in `~/mjo_predict` (private repo `nmathewa/mjo-predict`), n
 ~/miniforge3/envs/nma/bin/python pipeline/build.py [--fetch]
 ~/miniforge3/envs/nma/bin/python pipeline/outlines.py --workers 4
 GEFS_CACHE=~/mjo_predict/cache/gefs7 ~/mjo_predict/.venv/bin/python pipeline/forecast.py --model models
+make                                                          # page from content/ + theme/
 ~/miniforge3/envs/nma/bin/python pipeline/serve.py            # http://0.0.0.0:8765
 ```
 Browser checks: `@playwright/test` from `node_modules`; put throwaway scripts in the repo root as
