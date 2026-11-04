@@ -44,7 +44,6 @@ body {
 }
 a { color: var(--link); text-underline-offset: 2px; text-decoration-thickness: 1px; }
 h1.title { display: flex; align-items: center; gap: 12px; }
-.logo { width: 44px; height: 44px; flex: none; }
 h1 { font-size: 2.3rem; line-height: 1.12; margin: 0 0 6px; font-weight: 600; letter-spacing: -0.01em; }
 h2 { font-size: 1.05rem; margin: 0 0 8px; font-weight: 600; }
 h3 { font-size: 1rem; font-weight: 600; margin: 1.2em 0 0.3em; }

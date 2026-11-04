@@ -3,8 +3,6 @@
 author:
   - Nirmal Mathew Alex
 affiliation: Florida Institute of Technology
-logo: img/logo-phase.svg
-favicon: img/logo-phase.svg
 root: ""
 main-class: page
 css: [css/style.css]

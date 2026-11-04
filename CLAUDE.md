@@ -42,7 +42,7 @@ The ML/science lives in `~/mjo_predict` (private repo `nmathewa/mjo-predict`), n
   events `mjo:time`, `mjo:select`), `js/detail.js` (one system, after Kerns & Chen 2020 Fig. 1),
   `js/forecast.js` (forecast cone), `js/now.js` (current-state line). D3/topojson/land in `site/vendor/`.
 - Style: academic (Source Serif 4 + Source Sans 3), Okabe–Ito blue `--lpt` / vermillion `--rmm` on
-  white; dark mode kept; theme toggle; phase-diagram logo `site/img/logo-phase.svg`.
+  white; dark mode kept; theme toggle; no logo (title only; favicon is the template default).
 - `.github/workflows/pages.yml` — daily 06:30 UTC: latest template + pandoc, build data, outlines,
   forecast, `make`, deploy Pages.
   Public repo → Actions minutes free. Keepalive action (no commits).
