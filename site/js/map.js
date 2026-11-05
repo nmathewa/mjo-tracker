@@ -1,24 +1,17 @@
-// Interactive map of LPT tracks: pan/zoom, a time slider with playback, systems drawn at
-// their real rain-area size, and an optional layer of non-MJO LPT systems for context.
-// The current time is broadcast as a "mjo:time" event so the Hovmöller and phase
-// diagram can show a matching cursor (charts.js).
-import { DAY_MS, fmtDay, phaseLon, PHASE_REGION, parseDay, hashFor, loadOthers, loadLand50, coverageText } from "./data.js";
+// Interactive map of LPT tracks: pan/zoom and an optional layer of non-MJO LPT systems for context.
+import { DAY_MS, fmtDay, parseDay, hashFor, loadOthers, loadLand50, coverageText } from "./data.js";
 import { showTip, hideTip, describe } from "./charts.js";
 
 const LAT = 40;          // map shows ±LAT at the widest zoom
-const STEP_H = 6;        // slider step, hours (the track resolution)
-const KM_PER_DEG = 111.2;
 
 // survives redraws, so changing the window keeps your zoom and layers
-const ui = { transform: null, width: 0, showOthers: false, t: null, playing: null, land50: null };
+const ui = { transform: null, width: 0, showOthers: false, land50: null };
 
 const inWindow = (s, st) => s.t1 > st.t0 && s.t0 < st.t1;
-const fmtTime = d3.utcFormat("%-d %b %Y %H UTC");
 const fmtLon = (l) => { l = ((Math.round(l) % 360) + 360) % 360; return l === 0 || l === 180 ? `${l}°` : l < 180 ? `${l}°E` : `${360 - l}°W`; };
 
 export function drawMap(sel, data, state) {
   const root = d3.select(sel), card = root.node().closest(".card");
-  stop();
   root.selectAll("*").remove();
   const off = !state.methods.has("lpt");
   const sys = data.lpt.filter((s) => s.track && inWindow(s, state));
@@ -28,7 +21,7 @@ export function drawMap(sel, data, state) {
     return;
   }
 
-  // ---- controls: zoom, layers, playback
+  // ---- controls: zoom, layers
   const bar = root.append("div").attr("class", "map-bar");
   const zoomG = bar.append("div").attr("class", "map-zoom").attr("role", "group").attr("aria-label", "Zoom");
   const bIn = zoomG.append("button").attr("type", "button").attr("aria-label", "Zoom in").text("+");
@@ -64,10 +57,8 @@ export function drawMap(sel, data, state) {
   const setLand = (topo) => landPath.attr("d", geo(topojson.feature(topo, topo.objects.land)));
   setLand(ui.land50 ?? data.land);
   world.append("line").attr("class", "equator").attr("x1", 0).attr("x2", W).attr("y1", Hbase / 2).attr("y2", Hbase / 2);
-  const rmmBand = world.append("g").attr("class", "rmm-only rmm-band");
   const gOther = world.append("g").attr("class", "lpt-other-layer");
   const gTracks = world.append("g").attr("class", "lpt-only");
-  const gNow = world.append("g").attr("class", "lpt-only");
   const axis = svg.append("g").attr("class", "map-axis");
   svg.append("rect").attr("class", "frame").attr("width", W).attr("height", H);
 
@@ -84,8 +75,6 @@ export function drawMap(sel, data, state) {
     .attr("x1", ([a]) => xy(a)[0]).attr("y1", ([a]) => xy(a)[1]).attr("x2", ([, b]) => xy(b)[0]).attr("y2", ([, b]) => xy(b)[1]);
   const starts = sysG.append("circle").attr("class", "lpt-start")
     .attr("cx", (s) => xy(s.track[0])[0]).attr("cy", (s) => xy(s.track[0])[1]);
-
-  const radius = (p) => Math.sqrt(p.area / Math.PI) / KM_PER_DEG * pxPerDeg;
 
   // no tracks here: say why, prominently, and offer windows that have them
   if (!sys.length) {
@@ -107,7 +96,6 @@ export function drawMap(sel, data, state) {
       .on("mousemove click", (ev, s) => showTip(ev, `<b>LPT system ${s.lpt_index}</b> (not MJO)<br>${fmtDay(s.t0)} – ${fmtDay(s.t1)} (${Math.round(s.duration_days)} d)`))
       .on("mouseleave", hideTip);
     applyZoomStyles();
-    setTime(ui.t);
   }
   otherIn.on("change", (ev) => { ui.showOthers = ev.target.checked; drawOthers(); });
 
@@ -125,8 +113,6 @@ export function drawMap(sel, data, state) {
     });
   function applyZoomStyles() {
     starts.attr("r", 3.5 / k);
-    // the RMM band label is drawn in world units; keep it 11px on screen at any zoom
-    rmmBand.selectAll("text").attr("y", 14 / k).style("font-size", `${11 / k}px`);
     world.style("--k", k);
   }
   function drawAxis(t) {
@@ -167,83 +153,11 @@ export function drawMap(sel, data, state) {
   else fitTracks(0);
   ui.width = W;
 
-  // ---- time: slider, playback, systems at their real size
-  const steps = Math.round((state.t1 - state.t0) / (STEP_H * 3600e3));
-  const tl = root.append("div").attr("class", "map-time");
-  const bPlay = tl.append("button").attr("type", "button").attr("class", "play").attr("aria-label", "Play").text("▶");
-  const slider = tl.append("input").attr("type", "range").attr("min", 0).attr("max", steps).attr("step", 1)
-    .attr("aria-label", "Time in window");
-  const label = tl.append("output").attr("class", "map-now");
-  const idx = (t) => Math.round((t - state.t0) / (STEP_H * 3600e3));
-  if (!ui.t || ui.t < state.t0 || ui.t > state.t1) ui.t = state.t1;
+  root.append("p").attr("class", "caption").html("Tracked centroids of MJO rain systems from Large-scale Precipitation Tracking " +
+    `(Kerns &amp; Chen; ${data.lptSrc.label}, ${coverageText(data.lptSrc)}); open circles mark where each system began. Thick blue lines are the MJO part of each track, thin blue lines the rest of the system's life; non-MJO LPT systems, when shown, are grey. ` +
+    "Drag to pan, scroll or +/− to zoom; click a track to know more about it.");
 
-  function setTime(t) {
-    ui.t = t;
-    slider.property("value", idx(t));
-    label.text(+t >= +state.t1 ? "whole window · press ▶ to play" : fmtTime(t));
-    // each system alive at t: its track so far (bold) and a disc of its rain area
-    // the whole-window view (slider at the end) shows tracks only
-    const playing = +t < +state.t1;
-    const alive = [];
-    for (const s of playing ? sys : []) {
-      if (t < s.t0 || t > s.t1) continue;
-      const i = d3.bisector((p) => p.t).right(s.track, t) - 1;
-      if (i >= 0) alive.push({ s, p: s.track[i], past: s.track.slice(0, i + 1) });
-    }
-    world.classed("is-playing", playing);
-    if (playing) {
-      sysG.selectAll("line.seg").classed("is-past", ([, b]) => b.t <= t);
-    }
-    gNow.selectAll("circle.lpt-now").data(alive, (d) => d.s.id).join("circle").attr("class", "lpt-now mark tip-target")
-      .attr("data-id", (d) => d.s.id)
-      .attr("cx", (d) => xy(d.p)[0]).attr("cy", (d) => xy(d.p)[1])
-      .attr("r", (d) => radius(d.p))
-      .on("mousemove click", (ev, d) => showTip(ev, `${describe(d.s)}<br>at ${fmtTime(t)}: ${Math.round(d.p.area / 1e3).toLocaleString()} thousand km² of heavy rain, ${d.p.lat.toFixed(1)}°, ${fmtLon(d.p.lon)}`))
-      .on("mouseleave", hideTip);
-    // non-MJO systems alive now
-    gOther.selectAll("path.lpt-other").classed("is-alive", (s) => t >= s.t0 && t <= s.t1);
-    // RMM: shade the approximate longitude of the current phase when active
-    const day = data.days[Math.floor((t - data.days[0].date) / DAY_MS)];
-    const on = playing && day && day.amp !== null && day.amp >= 1;
-    rmmBand.selectAll("*").remove();
-    if (on) {
-      const x = phaseLon(day.angle) * pxPerDeg, w = 30 * pxPerDeg;
-      rmmBand.append("rect").attr("x", x - w / 2).attr("width", w).attr("y", 0).attr("height", Hbase);
-      rmmBand.append("text").attr("class", "halo").attr("x", x).attr("y", 14 / k)
-        .style("font-size", `${11 / k}px`).attr("text-anchor", "middle")
-        .text(`RMM phase ${day.phase} (approx.)`)
-        .append("title").text(`RMM is an index, not a location: phase ${day.phase} usually means enhanced rain over the ${PHASE_REGION[day.phase]}`);
-    }
-    document.dispatchEvent(new CustomEvent("mjo:time", { detail: t }));
-  }
-
-  slider.on("input", (ev) => { stop(); setTime(new Date(+state.t0 + ev.target.value * STEP_H * 3600e3)); });
-  bPlay.on("click", () => (ui.playing ? stop() : play()));
-  function play() {
-    if (idx(ui.t) >= steps) setTime(state.t0);
-    bPlay.text("❚❚").attr("aria-label", "Pause");
-    let last = 0;
-    ui.playing = d3.timer((el) => {
-      if (el - last < 45) return;       // ~22 steps (5.5 days) per second
-      last = el;
-      const n = idx(ui.t) + 1;
-      if (n > steps) return stop();
-      setTime(new Date(+state.t0 + n * STEP_H * 3600e3));
-    });
-    ui.stopBtn = bPlay;
-  }
-  root.append("p").attr("class", "caption").html("Centroid tracks of MJO rain systems from Large-scale Precipitation Tracking " +
-    `(Kerns &amp; Chen; ${data.lptSrc.label}, ${coverageText(data.lptSrc)}); open circles mark where each system began. Bold segments are the MJO part of each system's life (its eastward-propagation periods on the MJO list); thin segments are the rest. ` +
-    "Pressing ▶ plays the window: discs show each system's rain area at that moment as a circle of equal area, not its real shape, " +
-    "and the shaded band marks the <em>approximate</em> longitude of the current RMM phase when the MJO is active. " +
-    "Drag to pan, scroll or +/− to zoom; click a track for that system's details.");
-
-  setTime(ui.t);
   drawOthers();
   applyZoomStyles();
 }
 
-function stop() {
-  if (ui.playing) { ui.playing.stop(); ui.playing = null; }
-  ui.stopBtn?.text("▶").attr("aria-label", "Play");
-}

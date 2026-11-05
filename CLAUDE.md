@@ -38,8 +38,8 @@ The ML/science lives in `~/mjo_predict` (private repo `nmathewa/mjo-predict`), n
   `make THEME=~/academic-site-template` builds against the local checkout. Edit text in
   `content/index.md`, never in `site/index.html`.
 - `site/` — static; `js/main.js` (state in URL hash `#from=&days=&m=&src=&sel=`),
-  `js/charts.js` (timeline, Hovmöller, phase diagram, list), `js/map.js` (pan/zoom/playback;
-  events `mjo:time`, `mjo:select`), `js/detail.js` (one system, after Kerns & Chen 2020 Fig. 1),
+  `js/charts.js` (timeline, Hovmöller, phase diagram, list), `js/map.js` (pan/zoom;
+  event `mjo:select`), `js/detail.js` (one system, after Kerns & Chen 2020 Fig. 1),
   `js/forecast.js` (forecast cone), `js/now.js` (current-state line). D3/topojson/land in `site/vendor/`.
 - Style: academic (Source Serif 4 + Source Sans 3), Okabe–Ito blue `--lpt` / vermillion `--rmm` on
   white; dark mode kept; theme toggle; no logo (title only; favicon is the template default).
@@ -67,3 +67,5 @@ dotfiles (`.s.mjs`) and delete them after.
 - The forecast is experimental, one test event; caption states its measured skill. Latest
   leave-one-winter-out result (21 DJF winters, in mjo-predict `reports/lowo_summary.txt`): best
   method from day 3–15, CRPS 18–41 % below following the GEFS rain; weak at day 1.
+  Its Maritime Continent crossing skill (Brier +0.13) may come from the RMM inputs, not the GEFS
+  fields — no ablation yet, so don't claim the model learns MJO dynamics.

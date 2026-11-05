@@ -2,7 +2,7 @@
 # academic-site-template (theme/). Front matter in index.md overrides these.
 author:
   - Nirmal Mathew Alex
-affiliation: Florida Institute of Technology
+affiliation: Florida Institute of Technology (FIT)
 root: ""
 main-class: page
 css: [css/style.css]

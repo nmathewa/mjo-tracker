@@ -1,7 +1,8 @@
 // Experimental track forecast (one test event), made in GitHub Actions by the trained rain-track
-// corrector (pipeline/forecast.py) and drawn here as a cone: median track, the distance from it that
-// holds 50 % and 90 % of 50 sampled tracks, the follow-the-GEFS-rain track and what happened.
-import { DAY_MS } from "./data.js";
+// corrector (pipeline/forecast.py): (a) a cone on a map — median track, the distance from it that holds
+// 50 % and 90 % of 50 sampled tracks, the follow-the-GEFS-rain track and what happened; (b) the chance of
+// reaching 150°E for each start against climatology, with the Brier skill score for this event.
+import { DAY_MS, loadLpt } from "./data.js";
 import { axisTitle, showTip, hideTip } from "./charts.js";
 
 const EVENT = "LPT-I-2010-70.2000";
@@ -21,19 +22,27 @@ async function load() {
 
 export async function drawForecast(sel, data) {
   const root = d3.select(sel);
-  const fc = await load();
+  const [fc, imerg] = await Promise.all([load(), loadLpt("imerg")]);
   root.selectAll("*").remove();
   if (!fc.starts.length) {
     root.append("p").attr("class", "empty-line").text("The forecast has not been built yet (pipeline/forecast.py).");
     return;
   }
-  const sys = data.lpt.find((s) => s.id === EVENT);
+  const sys = imerg.find((s) => s.id === EVENT);
   const t0s = fc.starts.map((s) => new Date(s.t0));
+  const clim = climatology(imerg);
+  // per start: model chance of reaching 150°E, climatology for that longitude, what happened
+  const cross = fc.starts.map((s, i) => s.p_reach_150E === null ? null : {
+    i, t0: t0s[i], p: s.p_reach_150E, c: clim(s.lon0), o: s.observed.some((o) => s.lon0 + o[0] >= 150) ? 1 : 0 });
+  const scored = cross.filter(Boolean);
+  const bs = (f) => d3.mean(scored, (d) => (f(d) - d.o) ** 2);
+  const bss = 1 - bs((d) => d.p) / bs((d) => d.c);
 
   root.append("p").attr("class", "fc-intro").html(
-    `Test case: MJO rain system <b>${EVENT.replace("LPT-I-", "")}</b>, ${fmtT(sys ? sys.t0 : t0s[0])} – ` +
-    `${fmtT(sys ? sys.t1 : t0s.at(-1))}, which crossed the Maritime Continent in late December 2011. ` +
-    `The model never saw this winter. <a href="#from=2011-12-10&days=80&m=rmm,lpt&src=imerg&sel=${EVENT}">Show it in the figures above →</a>`);
+    `Where will an MJO rain system go next, and will it cross the Maritime Continent? A test on one system, ` +
+    `<b>${EVENT.replace("LPT-I-", "")}</b> (${fmtT(sys ? sys.t0 : t0s[0])} – ${fmtT(sys ? sys.t1 : t0s.at(-1))}), ` +
+    `which crossed it in late December 2011. Move the slider to change the forecast start. ` +
+    `<a href="#from=2011-12-10&days=80&m=rmm,lpt&src=imerg&sel=${EVENT}">Show it in the figures above →</a>`);
 
   const bar = root.append("div").attr("class", "fc-bar");
   const st = bar.append("div").attr("class", "fc-start");
@@ -49,51 +58,80 @@ export async function drawForecast(sel, data) {
 
   const grid = root.append("div").attr("class", "fc-grid");
   const mapBox = grid.append("div").attr("class", "fc-panel");
-  mapBox.append("h3").html('<span class="panel-letter">(a)</span> Forecast cone');
+  mapBox.append("h3").html('<span class="panel-letter">(a)</span> Track and forecast cone');
   const mapDiv = mapBox.append("div");
-  const fanBox = grid.append("div").attr("class", "fc-panel");
-  fanBox.append("h3").html('<span class="panel-letter">(b)</span> Eastward move by lead time');
-  const fanDiv = fanBox.append("div");
+  const xBox = grid.append("div").attr("class", "fc-panel");
+  xBox.append("h3").html('<span class="panel-letter">(b)</span> Chance of crossing the Maritime Continent');
+  const xDiv = xBox.append("div");
   root.append("div").attr("class", "legend fc-legend").html(
-    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><rect x="1" y="2" width="26" height="10" class="fc-c90"/></svg>90 % of forecast tracks (map: to day 10)</span>' +
+    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><rect x="1" y="2" width="26" height="10" class="fc-c90"/></svg>where 90 % of forecast tracks fall (to day 10)</span>' +
     '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><rect x="1" y="2" width="26" height="10" class="fc-c50"/></svg>50 %</span>' +
-    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line x1="2" y1="7" x2="26" y2="7" class="fc-med"/></svg>median forecast (day marks)</span>' +
-    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line x1="2" y1="7" x2="26" y2="7" class="fc-rain"/></svg>follow the GEFS rain (no model)</span>' +
-    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line x1="2" y1="7" x2="26" y2="7" class="fc-obs"/></svg>what happened</span>');
+    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line x1="2" y1="7" x2="26" y2="7" class="fc-med"/></svg>model forecast (middle track, day marks)</span>' +
+    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line x1="2" y1="7" x2="26" y2="7" class="fc-rain"/></svg>follow the GEFS rain</span>' +
+    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line x1="2" y1="7" x2="26" y2="7" class="fc-obs"/></svg>what happened</span>' +
+    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><rect x="8" y="1" width="12" height="12" class="fc-pbar"/></svg>model chance of reaching 150°E</span>' +
+    '<span class="key"><svg class="sw" viewBox="0 0 28 14" aria-hidden="true"><line x1="3" y1="7" x2="25" y2="7" class="fc-clim"/></svg>climatology</span>');
   const stats = root.append("dl").attr("class", "fc-stats");
-  root.append("p").attr("class", "caption").html(
-    `<b>Experimental.</b> A trained rain-track corrector (CNN-Transformer, v${fc.model.version}) run in GitHub Actions: ` +
-    `for each start, the GEFS v12 reforecast (${fc.starts[0].members} members) is followed from the system's position ` +
-    `(“follow the GEFS rain”), and the model — which sees the GEFS fields in a window moving with the system, the ` +
-    `system's last 5 days and the RMM state — predicts how the real track departs from that, as 50 sampled tracks. ` +
-    `(a) Shaded: the distance from the median that holds 50 % and 90 % of the tracks at each lead; (b) the same as ` +
-    `eastward move, with the 150°E line (crossing the Maritime Continent). Measured skill, retraining with each of 21 ` +
-    `DJF winters of the GEFS reforecast held out in turn (1,073 starts): the model is the best of the methods tried ` +
-    `from day 3 to day 15, with 18–41 % lower CRPS than following the GEFS rain (90 % intervals over systems exclude ` +
-    `zero), and the only one with skill at saying whether a system crosses the Maritime Continent (Brier skill +0.13; ` +
-    `the others are negative). At day 1 it is worse than persistence or analogs. Its settings were chosen while ` +
-    `looking at this winter, so a clean test on later, operational GEFS winters is still to do. This page shows one ` +
-    `test event. Trained on ${fc.model.trained_on}; held out: ${fc.model.held_out}.`);
 
   function update() {
-    const s = fc.starts[ui.i], t0 = new Date(s.t0);
-    lab.text(`start ${fmtT(t0)} 00 UTC · ${s.lon0.toFixed(0)}°E`);
+    const s = fc.starts[ui.i], t0 = t0s[ui.i], x = cross[ui.i];
+    lab.text(`start ${fmtT(t0)} 00 UTC · ${fmtLon(s.lon0)}`);
     drawMap(mapDiv, data, sys, s, t0);
-    drawFan(fanDiv, s);
-    const move = (k) => s.median[k][0];
-    const obs = (k) => (s.observed[k] ? s.observed[k][0] : null);
-    const rows = [
-      ["Median eastward move, 5 d / 10 d", `${move(19).toFixed(0)}° / ${move(39).toFixed(0)}°`],
-      ["Observed, 5 d / 10 d", [19, 39].map((k) => (obs(k) === null ? "—" : `${obs(k).toFixed(0)}°`)).join(" / ")],
-      ["Still alive at 5 / 10 / 15 d", [19, 39, 59].map((k) => `${Math.round(100 * s.p_alive[k])} %`).join(" / ")],
-    ];
-    if (s.p_reach_150E !== null) {
-      const reached = s.observed.some((o) => s.lon0 + o[0] >= 150);
-      rows.push(["Reaches 150°E within 15 d", `${Math.round(100 * s.p_reach_150E)} % of tracks · observed: ${reached ? "yes" : "no"}`]);
-    }
+    drawCross(xDiv, cross, t0s, ui.i, go);
+    const rows = [x
+      ? ["Chance it reaches 150°E within 15 days", `model ${Math.round(100 * x.p)} % · climatology ${Math.round(100 * x.c)} % · it ${x.o ? "did" : "did not"}`]
+      : ["Chance it reaches 150°E within 15 days", "— already east of 150°E"],
+      [`Brier skill against climatology, this event (${scored.length} starts)`, `${bss >= 0 ? "+" : "−"}${Math.abs(bss).toFixed(2)} · 21 winters: +0.13`]];
     stats.selectAll("div").data(rows).join("div").html(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`);
   }
   update();
+}
+
+// Climatological chance of reaching 150°E within 15 days, from DJF 6-hourly positions of IMERG MJO systems
+// within ±10° of a start longitude west of 150°E (the test event left out).
+function climatology(list) {
+  const norm = (l) => ((l % 360) + 360) % 360, east = (l) => l >= 150 && l < 260;
+  const pts = [];
+  for (const s of list) {
+    if (s.id === EVENT || !s.track) continue;
+    const tr = s.track;
+    tr.forEach((p, i) => {
+      const m = p.t.getUTCMonth(), l = norm(p.lon);
+      if (!(m === 11 || m <= 1) || l >= 150) return;
+      let hit = 0;
+      for (let j = i + 1; j < tr.length && tr[j].t - p.t <= 15 * DAY_MS; j++) if (east(norm(tr[j].lon))) { hit = 1; break; }
+      pts.push([l, hit]);
+    });
+  }
+  return (lon0) => d3.mean(pts.filter(([l]) => Math.abs(l - lon0) <= 10), (p) => p[1]) ?? NaN;
+}
+
+function drawCross(div, cross, t0s, cur, go) {
+  div.selectAll("*").remove();
+  const W = Math.max(280, div.node().clientWidth || 420), H = Math.round(Math.min(320, Math.max(220, W * 0.66)));
+  const m = { t: 22, r: 10, b: 40, l: 44 };
+  const x = d3.scaleBand().domain(t0s.map((_, i) => i)).range([m.l, W - m.r]).padding(0.25);
+  const y = d3.scaleLinear().domain([0, 1]).range([H - m.b, m.t]);
+  const svg = div.append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img")
+    .attr("aria-label", "Model and climatological chance of reaching 150°E for each forecast start");
+  const fmtD = d3.utcFormat("%-d %b");
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`)
+    .call(d3.axisBottom(x).tickValues(t0s.map((_, i) => i).filter((i) => i % 3 === 0)).tickFormat((i) => fmtD(t0s[i])).tickSizeOuter(0));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`)
+    .call(d3.axisLeft(y).ticks(5).tickFormat((v) => `${Math.round(v * 100)} %`).tickSizeOuter(0));
+  axisTitle(svg, (m.l + W - m.r) / 2, H - 6, "Forecast start");
+  const g = svg.append("g");
+  cross.forEach((d, i) => {
+    const x0 = x(i), bw = x.bandwidth();
+    const col = g.append("g").attr("class", i === cur ? "fc-col is-cur" : "fc-col").style("cursor", "pointer").on("click", () => go(i));
+    col.append("rect").attr("x", x0 - x.step() * x.padding() / 2).attr("width", x.step()).attr("y", m.t).attr("height", H - m.b - m.t).attr("class", "fc-hit");
+    if (!d) { col.append("text").attr("class", "fc-east").attr("x", x0 + bw / 2).attr("y", H - m.b - 4).attr("text-anchor", "middle").text("E"); return; }
+    col.append("rect").attr("class", "fc-pbar").attr("x", x0).attr("width", bw).attr("y", y(d.p)).attr("height", y(0) - y(d.p));
+    col.append("line").attr("class", "fc-clim").attr("x1", x0 - 2).attr("x2", x0 + bw + 2).attr("y1", y(d.c)).attr("y2", y(d.c));
+    col.append("text").attr("class", "fc-out").attr("x", x0 + bw / 2).attr("y", m.t - 7).attr("text-anchor", "middle").text(d.o ? "✓" : "✗");
+    col.on("mousemove", (ev) => showTip(ev, `<b>${fmtT(d.t0)}</b><br>model ${Math.round(100 * d.p)} %<br>climatology ${Math.round(100 * d.c)} %<br>reached 150°E: ${d.o ? "yes" : "no"}`))
+      .on("mouseleave", hideTip);
+  });
 }
 
 function unwrap(lon, ref) { let l = lon; while (l - ref > 180) l -= 360; while (l - ref < -180) l += 360; return l; }
@@ -140,6 +178,11 @@ function drawMap(div, data, sys, s, t0) {
       .on("mouseleave", hideTip);
     g.append("text").attr("class", "halo fc-daylab").attr("x", x + 5).attr("y", y - 5).text(`${day}d`);
   }
+  const x150 = xy(unwrap(150, lon0), cy)[0];
+  if (x150 > 0 && x150 < W) {
+    g.append("line").attr("class", "fc-ref").attr("x1", x150).attr("x2", x150).attr("y1", 0).attr("y2", H);
+    g.append("text").attr("class", "halo fc-daylab").attr("x", x150 + 4).attr("y", 14).text("150°E");
+  }
   const [sx, sy] = xy(lon0, lat0);
   g.append("circle").attr("class", "fc-dot").attr("r", 5).attr("cx", sx).attr("cy", sy);
   const ax = svg.append("g").attr("class", "map-axis");
@@ -148,42 +191,4 @@ function drawMap(div, data, sys, s, t0) {
     if (x > 20 && x < W - 20) ax.append("text").attr("class", "halo").attr("x", x).attr("y", H - 5).attr("text-anchor", "middle").text(fmtLon(l));
   }
   svg.append("rect").attr("class", "frame").attr("width", W).attr("height", H);
-}
-
-function drawFan(div, s) {
-  div.selectAll("*").remove();
-  const W = Math.max(280, div.node().clientWidth || 420), H = Math.round(Math.min(360, Math.max(240, W * 0.72)));
-  const m = { t: 10, r: 14, b: 40, l: 56 }, n = s.median.length;
-  const [q10, q25, q50, q75, q90] = s.lon_q;
-  const obs = s.observed.map((o) => o[0]);
-  const x = d3.scaleLinear().domain([0, n / 4]).range([m.l, W - m.r]);
-  const y = d3.scaleLinear().domain(d3.extent([0, ...q10, ...q90, ...obs, ...s.rain.map((r) => r[0])])).nice().range([H - m.b, m.t]);
-  const svg = div.append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img").attr("aria-label", "Eastward move by lead time");
-  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(6).tickSizeOuter(0));
-  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(6).tickSizeOuter(0).tickFormat((v) => `${v}°`));
-  axisTitle(svg, (m.l + W - m.r) / 2, H - 6, "Lead (days)");
-  axisTitle(svg, 12, (m.t + H - m.b) / 2, "Eastward move (° lon)", -90);
-  svg.append("line").attr("class", "zero").attr("x1", m.l).attr("x2", W - m.r).attr("y1", y(0)).attr("y2", y(0));
-  if (s.lon0 < 150 && y.domain()[1] >= 150 - s.lon0) {
-    const yy = y(150 - s.lon0);
-    svg.append("line").attr("class", "fc-ref").attr("x1", m.l).attr("x2", W - m.r).attr("y1", yy).attr("y2", yy);
-    svg.append("text").attr("class", "halo").attr("x", W - m.r - 4).attr("y", yy - 4).attr("text-anchor", "end").text("150°E");
-  }
-  const lead = (k) => x((k + 1) / 4);
-  const area = (lo, hi) => d3.area().x((_, k) => lead(k)).y0((_, k) => y(lo[k])).y1((_, k) => y(hi[k]))(lo);
-  svg.append("path").attr("class", "fc-band90").attr("d", area(q10, q90));
-  svg.append("path").attr("class", "fc-band50").attr("d", area(q25, q75));
-  svg.append("path").attr("class", "fc-rain").attr("d", d3.line().x((_, k) => lead(k)).y((r) => y(r[0]))(s.rain));
-  svg.append("path").attr("class", "fc-med").attr("d", d3.line().x((_, k) => lead(k)).y((v) => y(v))(q50));
-  if (obs.length) svg.append("path").attr("class", "fc-obs").attr("d", d3.line().x((_, k) => lead(k)).y((v) => y(v))(obs));
-  const rule = svg.append("line").attr("class", "hover-rule").attr("y1", m.t).attr("y2", H - m.b).style("display", "none");
-  svg.append("rect").attr("x", m.l).attr("y", m.t).attr("width", W - m.l - m.r).attr("height", H - m.t - m.b).attr("fill", "transparent")
-    .on("mousemove click", (ev) => {
-      const k = Math.max(0, Math.min(n - 1, Math.round(x.invert(d3.pointer(ev)[0]) * 4) - 1));
-      rule.style("display", null).attr("x1", lead(k)).attr("x2", lead(k));
-      showTip(ev, `<b>+${((k + 1) / 4).toFixed(2)} d</b><br>median ${q50[k].toFixed(1)}°<br>50 %: ${q25[k].toFixed(0)}° to ${q75[k].toFixed(0)}°<br>` +
-        `90 %: ${q10[k].toFixed(0)}° to ${q90[k].toFixed(0)}°<br>rain track ${s.rain[k][0].toFixed(1)}°` +
-        (obs[k] !== undefined ? `<br>observed ${obs[k].toFixed(1)}°` : ""));
-    })
-    .on("mouseleave", () => { rule.style("display", "none"); hideTip(); });
 }

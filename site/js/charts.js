@@ -59,23 +59,6 @@ export function axisTitle(svg, x, y, text, rot = 0) {
     .attr("transform", `translate(${x},${y})${rot ? ` rotate(${rot})` : ""}`).text(text);
 }
 
-// time cursors on the Hovmöller and phase diagram, driven by the map slider ("mjo:time")
-const cursor = { hov: null, phase: null };
-document.addEventListener("mjo:time", (ev) => {
-  const t = ev.detail;
-  if (cursor.hov?.line.node().isConnected) {
-    const on = +t < +cursor.hov.state.t1;
-    cursor.hov.line.style("display", on ? null : "none").attr("y1", cursor.hov.y(t)).attr("y2", cursor.hov.y(t));
-  }
-  if (cursor.phase?.dot.node().isConnected) {
-    const { pts, s, sy, dot, state } = cursor.phase;
-    const d = pts.find((p) => +p.date === +d3.utcDay.floor(t));
-    const on = d && +t < +state.t1;
-    dot.style("display", on ? null : "none");
-    if (on) dot.attr("cx", s(d.rmm1)).attr("cy", sy(d.rmm2));
-  }
-});
-
 const isDark = () => getComputedStyle(document.documentElement).colorScheme.includes("dark");
 
 function inWindow(a0, a1, s) { return a1 > s.t0 && a0 < s.t1; }
@@ -227,9 +210,6 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
     .on("mousemove", (ev, s) => showTip(ev, describe(s) + "<br><i>click for details</i>")).on("mouseleave", hideTip)
     .on("click", (ev, s) => { showTip(ev, describe(s)); document.dispatchEvent(new CustomEvent("mjo:select", { detail: s.id })); });
 
-  // time cursor, moved by the map's time slider
-  cursor.hov = { y, line: svg.append("line").attr("class", "time-cursor").attr("x1", m.l).attr("x2", W - m.r).style("display", "none"), state };
-
   // speed guide: 5 m/s from the top-left of the Indian Ocean
   const lon0 = 60, t0 = addDays(state.t0, 2), sp = 5 * 86400 / 111e3; // deg/day
   const tEnd = addDays(t0, Math.min(nDays - 4, 30));
@@ -245,13 +225,13 @@ export function drawHovmoller(sel, data, state, extraH = 0) {
   legend(sel, [
     ...(tracked.length ? [
       { cls: "lpt-only", swatch: '<path class="lpt-track mjo" d="M3 3c6 2 4 6 10 5s6 4 12 3"/>',
-        label: `MJO part of an LPT track <span class="dim">(eastward propagation; click for details)</span>` },
+        label: "MJO part of an LPT track" },
       { cls: "lpt-only", swatch: '<path class="lpt-track life" d="M3 3c6 2 4 6 10 5s6 4 12 3"/>',
         label: `rest of the system's life` },
     ] : []),
     ...(rmmDays.length ? [
       { cls: "rmm-only", swatch: '<circle class="rmm-dot" cx="5" cy="7" r="2.5"/><circle class="rmm-dot" cx="13" cy="7" r="3.8"/><circle class="rmm-dot" cx="23" cy="7" r="5"/>',
-        label: "RMM day, amplitude ≥ 1 <span class=\"dim\">(size = amplitude; approximate longitude)</span>" },
+        label: "RMM" },
     ] : []),
     { swatch: '<line class="guide" x1="3" y1="3" x2="25" y2="11"/>', label: "5 m s⁻¹ eastward reference" },
     ...(sys.length ? [] : [
@@ -324,7 +304,6 @@ export function drawPhase(sel, data, state) {
     .attr("stroke", col(0));
   g.append("circle").attr("class", "traj-end").attr("r", 5).attr("cx", s(pts.at(-1).rmm1)).attr("cy", sy(pts.at(-1).rmm2))
     .attr("fill", col(pts.length - 1));
-  cursor.phase = { pts, s, sy, state, dot: svg.append("circle").attr("class", "time-cursor-dot").attr("r", 6).style("display", "none") };
 
   const stops = d3.range(0, 1.01, 0.25).map((t) => `<stop offset="${t}" stop-color="${vir(t)}"/>`).join("");
   const key = d3.select(sel).append("div").attr("class", "legend time-key rmm-only");

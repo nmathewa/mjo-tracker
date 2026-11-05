@@ -240,6 +240,17 @@ function writeAbout() {
   <p>The non-MJO systems are shown on the map when switched on. A system can have several eastward-propagation
     segments, and the event table lists one row per segment. The two databases use different rainfall products and
     tracking settings, so their systems and identifiers differ.</p>
+  <h3>Track forecast (experimental)</h3>
+  <p>For each start, the GEFS v12 reforecast (5 members) is followed from the system's position (“follow the GEFS
+    rain”). A CNN-Transformer model sees the GEFS fields in a window moving with the system, the system's last 5 days
+    and the RMM, ENSO and QBO state, and predicts how the real track departs from the rain-following one, as 50
+    sampled tracks. It was tested by leaving out each of 21 winters (DJF) of the reforecast in turn (1,073 starts).
+    CRPS (continuous ranked probability score) scores the whole spread of forecast tracks, not just the middle one;
+    lower is better. The Brier skill score scores the forecast chance of reaching 150°E within 15 days against climatology:
+    1 is perfect, 0 is no better, below 0 is worse. In panel (b) the climatology is the fraction of 6-hourly
+    positions of IMERG MJO systems in December–February, within 10° of the start longitude and west of 150°E, that
+    reached 150°E within 15 days (the test event left out). The page shows one test event; a clean test on
+    later, operational GEFS winters is still to do.</p>
   <h3>Caveats</h3>
   <ul class="caveats">
     <li><b>Approximate RMM longitude.</b> RMM is an index, not a location. On the Hovmöller diagram and map its days are
